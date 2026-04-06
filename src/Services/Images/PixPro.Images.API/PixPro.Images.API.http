@@ -1,0 +1,6 @@
+@PixPro.Images.API_HostAddress = http://localhost:5042
+
+GET {{PixPro.Images.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
