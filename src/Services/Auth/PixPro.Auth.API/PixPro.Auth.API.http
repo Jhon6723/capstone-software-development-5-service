@@ -1,6 +1,0 @@
-@PixPro.Auth.API_HostAddress = http://localhost:5123
-
-GET {{PixPro.Auth.API_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###
