@@ -1,0 +1,86 @@
+# service/docker-compose.yml
+version: "3.9"
+
+services:
+
+  frontend:
+    image: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/client/client:latest
+    ports:
+      - "80:80"
+    networks:
+      - pixpro_net
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 5s
+        failure_action: rollback
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+
+  gateway:
+    image: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/gateway:latest
+    ports:
+      - "8080:8080"
+    networks:
+      - pixpro_net
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - AuthService__BaseUrl=http://auth:8081
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+      placement:
+        constraints:
+          - node.role == worker
+
+  auth:
+    image: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/auth:latest
+    ports:
+      - "8081:8081"
+    networks:
+      - pixpro_net
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__Default=Server=db;Database=PixProAuth;User=sa;Password=${DB_PASSWORD}
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - db_data:/var/opt/mssql
+    networks:
+      - pixpro_net
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+
+networks:
+  pixpro_net:
+    external: true
+
+volumes:
+  db_data:
