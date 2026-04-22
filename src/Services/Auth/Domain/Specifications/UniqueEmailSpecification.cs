@@ -4,14 +4,9 @@ using PixPro.Services.Auth.Domain.ValueObjects;
 
 namespace PixPro.Services.Auth.Domain.Specifications;
 
-public sealed class UniqueEmailSpecification : ISpecification<string>
+public sealed class UniqueEmailSpecification(IUserRepository userRepository) : ISpecification<string>
 {
-    private readonly IUserRepository _userRepository;
-
-    public UniqueEmailSpecification(IUserRepository userRepository)
-    {
-        _userRepository = userRepository ?? throw new ArgumentNullException(nameof(userRepository));
-    }
+    private readonly IUserRepository _userRepository = userRepository ?? throw new ArgumentNullException(nameof(userRepository));
 
     public async Task<bool> IsSatisfiedByAsync(string candidate, CancellationToken cancellationToken = default)
     {
