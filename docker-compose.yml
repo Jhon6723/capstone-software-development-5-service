@@ -63,6 +63,26 @@ services:
         condition: on-failure
         max_attempts: 3
 
+  projects:
+    image: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/projects:latest
+    ports:
+      - "8082:8082"
+    networks:
+      - pixpro_net
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__ProjectsDb=Host=projects-db;Port=5432;Database=pixpro_projects;Username=postgres;Password=${PROJECTS_DB_PASSWORD}
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest
     environment:
@@ -78,9 +98,26 @@ services:
         constraints:
           - node.role == manager
 
+  projects-db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=pixpro_projects
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${PROJECTS_DB_PASSWORD}
+    volumes:
+      - projects_db_data:/var/lib/postgresql/data
+    networks:
+      - pixpro_net
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+
 networks:
   pixpro_net:
     external: true
 
 volumes:
   db_data:
+  projects_db_data:
