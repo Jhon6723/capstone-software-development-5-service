@@ -1,0 +1,13 @@
+using System.ComponentModel.DataAnnotations;
+
+namespace PixPro.Services.Auth.Application.DTOs.Requests;
+
+public sealed record RegisterUserRequest
+{
+    [Required(ErrorMessage = "Auth0Id is required")]
+    public string Auth0Id { get; init; } = string.Empty;
+
+    [Required(ErrorMessage = "Email is required")]
+    [EmailAddress(ErrorMessage = "Invalid email format")]
+    public string Email { get; init; } = string.Empty;
+}
