@@ -1,6 +1,0 @@
-@PixPro.Notifications.API_HostAddress = http://localhost:5268
-
-GET {{PixPro.Notifications.API_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###

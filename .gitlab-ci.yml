@@ -1,0 +1,130 @@
+stages:
+  - build
+  - test
+  - docker
+  - deploy
+
+variables:
+  REGISTRY_GATEWAY: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/gateway
+  REGISTRY_AUTH: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/auth
+
+build:gateway:
+  stage: build
+  image: mcr.microsoft.com/dotnet/sdk:9.0
+  script:
+    - dotnet restore src/Gateway/API/API.csproj
+    - dotnet build src/Gateway/API/API.csproj --no-restore -c Release
+  artifacts:
+    paths:
+      - src/Gateway/API/bin/
+    expire_in: 1 hour
+
+build:auth:
+  stage: build
+  image: mcr.microsoft.com/dotnet/sdk:9.0
+  script:
+    - dotnet restore src/Services/Auth/API/API.csproj
+    - dotnet build src/Services/Auth/API/API.csproj --no-restore -c Release
+  artifacts:
+    paths:
+      - src/Services/Auth/API/bin/
+    expire_in: 1 hour
+
+test:gateway:
+  stage: test
+  image: mcr.microsoft.com/dotnet/sdk:9.0
+  allow_failure: true
+  dependencies:
+    - build:gateway
+  script:
+    - dotnet test src/Gateway/API/API.csproj
+      --no-build -c Release
+      --logger "junit;LogFilePath=test-results.xml"
+  artifacts:
+    when: always
+    reports:
+      junit: src/Gateway/API/test-results.xml
+    expire_in: 1 week
+
+test:auth:
+  stage: test
+  image: mcr.microsoft.com/dotnet/sdk:9.0
+  allow_failure: true
+  dependencies:
+    - build:auth
+  script:
+    - dotnet test src/Services/Auth/API/API.csproj
+      --no-build -c Release
+      --logger "junit;LogFilePath=test-results.xml"
+  artifacts:
+    when: always
+    reports:
+      junit: src/Services/Auth/API/test-results.xml
+    expire_in: 1 week
+
+docker:gateway:
+  stage: docker
+  image: docker:27
+  services:
+    - docker:27-dind
+  dependencies:
+    - build:gateway
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - docker build
+      -t $REGISTRY_GATEWAY:$CI_COMMIT_SHA
+      -t $REGISTRY_GATEWAY:latest
+      -f src/Gateway/API/Dockerfile
+      .
+    - docker push $REGISTRY_GATEWAY:$CI_COMMIT_SHA
+    - docker push $REGISTRY_GATEWAY:latest
+
+docker:auth:
+  stage: docker
+  image: docker:27
+  services:
+    - docker:27-dind
+  dependencies:
+    - build:auth
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - docker build
+      -t $REGISTRY_AUTH:$CI_COMMIT_SHA
+      -t $REGISTRY_AUTH:latest
+      -f src/Services/Auth/API/Dockerfile
+      .
+    - docker push $REGISTRY_AUTH:$CI_COMMIT_SHA
+    - docker push $REGISTRY_AUTH:latest
+
+deploy:swarm:
+  stage: deploy
+  image: alpine:3.19
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  before_script:
+    - apk add --no-cache openssh-client
+    - eval $(ssh-agent -s)
+    - echo "$SWARM_MANAGER_SSH_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh && chmod 700 ~/.ssh
+    - ssh-keyscan $SWARM_MANAGER_IP >> ~/.ssh/known_hosts
+  script:
+    - ssh deploy@$SWARM_MANAGER_IP "
+      docker service update
+      --image $REGISTRY_GATEWAY:$CI_COMMIT_SHA
+      --update-parallelism 1
+      --update-delay 10s
+      --update-failure-action rollback
+      --update-order start-first
+      pixpro_gateway
+      &&
+      docker service update
+      --image $REGISTRY_AUTH:$CI_COMMIT_SHA
+      --update-parallelism 1
+      --update-delay 10s
+      --update-failure-action rollback
+      --update-order start-first
+      pixpro_auth
+      "
+  allow_failure: true
