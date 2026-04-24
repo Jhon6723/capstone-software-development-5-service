@@ -7,6 +7,7 @@ stages:
 variables:
   REGISTRY_GATEWAY: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/gateway
   REGISTRY_AUTH: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/auth
+  REGISTRY_PROJECTS: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/projects
 
 build:gateway:
   stage: build
@@ -28,6 +29,17 @@ build:auth:
   artifacts:
     paths:
       - src/Services/Auth/API/bin/
+    expire_in: 1 hour
+
+build:projects:
+  stage: build
+  image: mcr.microsoft.com/dotnet/sdk:9.0
+  script:
+    - dotnet restore src/Services/Projects/API/API.csproj
+    - dotnet build src/Services/Projects/API/API.csproj --no-restore -c Release
+  artifacts:
+    paths:
+      - src/Services/Projects/API/bin/
     expire_in: 1 hour
 
 test:gateway:
@@ -98,6 +110,24 @@ docker:auth:
     - docker push $REGISTRY_AUTH:$CI_COMMIT_SHA
     - docker push $REGISTRY_AUTH:latest
 
+docker:projects:
+  stage: docker
+  image: docker:27
+  services:
+    - docker:27-dind
+  dependencies:
+    - build:projects
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - docker build
+      -t $REGISTRY_PROJECTS:$CI_COMMIT_SHA
+      -t $REGISTRY_PROJECTS:latest
+      -f src/Services/Projects/API/Dockerfile
+      .
+    - docker push $REGISTRY_PROJECTS:$CI_COMMIT_SHA
+    - docker push $REGISTRY_PROJECTS:latest
+
 deploy:swarm:
   stage: deploy
   image: alpine:3.19
@@ -126,4 +156,12 @@ deploy:swarm:
       --update-failure-action rollback
       --update-order start-first
       pixpro_auth
+      &&
+      docker service update
+      --image $REGISTRY_PROJECTS:$CI_COMMIT_SHA
+      --update-parallelism 1
+      --update-delay 10s
+      --update-failure-action rollback
+      --update-order start-first
+      pixpro_projects
       "
