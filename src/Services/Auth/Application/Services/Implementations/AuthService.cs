@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using PixPro.Services.Auth.Application.Common.Results;
 using PixPro.Services.Auth.Application.DTOs.Requests;
 using PixPro.Services.Auth.Application.DTOs.Responses;
@@ -17,12 +18,52 @@ public sealed class AuthService : IAuthService
         _userRepository = userRepository;
     }
 
+    private static Result ValidatePassword(string password)
+    {
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            return Error.Validation(
+                "Password.Required",
+                "Password is required.");
+        }
+
+        if (password.Length < 8)
+        {
+            return Error.Validation(
+                "Password.TooShort",
+                "Password must have at least 8 characters.");
+        }
+
+        if (!Regex.IsMatch(password, @"[A-Z]"))
+        {
+            return Error.Validation(
+                "Password.MissingUpperCase",
+                "Password must contain at least 1 capital letter.");
+        }
+
+        if (!Regex.IsMatch(password, @"[0-9]"))
+        {
+            return Error.Validation(
+                "Password.MissingNumber",
+                "Password must contain at least 1 number.");
+        }
+
+        return Result.Success();
+    }
+
     public async Task<Result<UserResponse>> RegisterUserAsync(
         RegisterUserRequest request,
         CancellationToken cancellationToken = default)
     {
         try
         {
+            // Validate password requirements
+            var passwordValidation = ValidatePassword(request.Password);
+            if (passwordValidation.IsFailure)
+            {
+                return Result<UserResponse>.Failure(passwordValidation.Error);
+            }
+
             // Validate email uniqueness using Specification
             var uniqueEmailSpec = new UniqueEmailSpecification(_userRepository);
             var isEmailUnique = await uniqueEmailSpec.IsSatisfiedByAsync(request.Email, cancellationToken);
@@ -34,8 +75,11 @@ public sealed class AuthService : IAuthService
                     $"A user with email '{request.Email}' already exists.");
             }
 
-            // Create User entity
-            var user = new User(request.Auth0Id, request.Email);
+            // Hash password before creating entity
+            var hashedPassword = BCrypt.Net.BCrypt.HashPassword(request.Password);
+
+            // Create User entity with hashed password
+            var user = new User(request.Auth0Id, request.Email, hashedPassword);
 
             // Save to repository
             await _userRepository.AddAsync(user, cancellationToken);
