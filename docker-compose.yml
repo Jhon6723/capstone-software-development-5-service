@@ -84,12 +84,12 @@ services:
         max_attempts: 3
 
   db:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    image: postgres:latest
     environment:
-      - ACCEPT_EULA=Y
-      - SA_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=PixProAuth
     volumes:
-      - db_data:/var/opt/mssql
+      - db_data:/var/lib/postgresql/data
     networks:
       - pixpro_net
     deploy:
