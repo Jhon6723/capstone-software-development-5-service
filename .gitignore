@@ -211,6 +211,12 @@ FakesAssemblies/
 
 .vscode
 
+# Environment variables and secrets
 .env
-.env.*
+.env.local
+.env.*.local
 
+# Local configuration files with sensitive data
+appsettings.*.local.json
+**/appsettings.*.local.json
+scripts/

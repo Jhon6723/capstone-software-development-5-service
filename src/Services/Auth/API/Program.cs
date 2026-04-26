@@ -1,8 +1,16 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
+using PixPro.Services.Auth.Application;
 using PixPro.Services.Auth.Domain.Repositories;
 using PixPro.Services.Auth.Infrastructure.Persistence;
 using PixPro.Services.Auth.Infrastructure.Persistence.Repositories;
+
+// Load .env file if it exists (for local development without Docker)
+var envPath = Path.Combine(Directory.GetCurrentDirectory(), "../../../../.env");
+if (File.Exists(envPath))
+{
+    DotNetEnv.Env.Load(envPath);
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,7 +20,11 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddDbContext<AuthDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("AuthDb")));
 
+// Register Infrastructure services
 builder.Services.AddScoped<IUserRepository, UserRepository>();
+
+// Register Application services
+builder.Services.AddApplicationServices();
 
 builder.Services.AddSwaggerGen(options =>
 {
