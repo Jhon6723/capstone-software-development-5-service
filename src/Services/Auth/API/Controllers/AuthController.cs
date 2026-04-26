@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
+using PixPro.Services.Auth.Application.DTOs.Responses;
 using PixPro.Services.Auth.Application.Common.Results;
 using PixPro.Services.Auth.Application.DTOs.Requests;
-using PixPro.Services.Auth.Application.DTOs.Responses;
 using PixPro.Services.Auth.Application.Services.Interfaces;
 
 namespace PixPro.Services.Auth.API.Controllers;
@@ -48,6 +48,34 @@ public class AuthController : ControllerBase
                 result.Value);
         }
 
+        return HandleErrorResult(result.Error!);
+    }
+
+    /// <summary>
+    /// Login user and generate JWT token
+    /// </summary>
+    /// <param name="request">User login credentials</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>JWT token and user information</returns>
+    [HttpPost("login")]
+    [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> Login(
+        [FromBody] LoginRequest request,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Login attempt for email: {Email}", request.Email);
+
+        var result = await _authService.LoginAsync(request, cancellationToken);
+
+        if (result.IsSuccess)
+        {
+            _logger.LogInformation("User logged in successfully: {Email}", request.Email);
+            return Ok(result.Value);
+        }
+
+        _logger.LogWarning("Login failed for email: {Email}", request.Email);
         return HandleErrorResult(result.Error!);
     }
 
