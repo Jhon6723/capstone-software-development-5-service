@@ -13,4 +13,8 @@ public interface IAuthService
     Task<Result<UserResponse>> GetUserByEmailAsync(
         string email,
         CancellationToken cancellationToken = default);
+
+    Task<Result<LoginResponse>> LoginAsync(
+        LoginRequest request,
+        CancellationToken cancellationToken = default);
 }
