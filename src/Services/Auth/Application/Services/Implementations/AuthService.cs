@@ -59,9 +59,9 @@ public sealed class AuthService : IAuthService
         {
             // Validate password requirements
             var passwordValidation = ValidatePassword(request.Password);
-            if (passwordValidation.IsFailure)
+            if (!passwordValidation.IsSuccess)
             {
-                return Result<UserResponse>.Failure(passwordValidation.Error);
+                return Result<UserResponse>.Failure(passwordValidation.Error!);
             }
 
             // Validate email uniqueness using Specification
