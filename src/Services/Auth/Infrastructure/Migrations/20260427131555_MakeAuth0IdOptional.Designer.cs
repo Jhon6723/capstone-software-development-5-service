@@ -12,8 +12,8 @@ using PixPro.Services.Auth.Infrastructure.Persistence;
 namespace PixPro.Services.Auth.Infrastructure.Migrations
 {
     [DbContext(typeof(AuthDbContext))]
-    [Migration("20260420183618_CreateUsersTable")]
-    partial class CreateUsersTable
+    [Migration("20260427131555_MakeAuth0IdOptional")]
+    partial class MakeAuth0IdOptional
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -32,7 +32,6 @@ namespace PixPro.Services.Auth.Infrastructure.Migrations
                         .HasColumnName("id");
 
                     b.Property<string>("Auth0Id")
-                        .IsRequired()
                         .HasColumnType("varchar(128)")
                         .HasColumnName("auth0_id");
 
@@ -44,6 +43,10 @@ namespace PixPro.Services.Auth.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("varchar(256)")
                         .HasColumnName("email");
+
+                    b.Property<string>("Password")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
