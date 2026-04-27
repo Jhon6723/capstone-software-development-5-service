@@ -12,10 +12,12 @@ namespace PixPro.Services.Auth.Application.Services.Implementations;
 public sealed class AuthService : IAuthService
 {
     private readonly IUserRepository _userRepository;
+    private readonly IJwtTokenGenerator _jwtTokenGenerator;
 
-    public AuthService(IUserRepository userRepository)
+    public AuthService(IUserRepository userRepository, IJwtTokenGenerator jwtTokenGenerator)
     {
         _userRepository = userRepository;
+        _jwtTokenGenerator = jwtTokenGenerator;
     }
 
     private static Result ValidatePassword(string password)
@@ -140,6 +142,58 @@ public sealed class AuthService : IAuthService
             return Error.Failure(
                 "User.RetrievalFailed",
                 $"An error occurred while retrieving the user: {ex.Message}");
+        }
+    }
+
+    public async Task<Result<LoginResponse>> LoginAsync(
+        LoginRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // Find user by email
+            var user = await _userRepository.GetByEmailAsync(request.Email, cancellationToken);
+
+            if (user is null)
+            {
+                return Error.Unauthorized(
+                    "Auth.InvalidCredentials",
+                    "Invalid credentials.");
+            }
+
+            // Verify password
+            if (!BCrypt.Net.BCrypt.Verify(request.Password, user.Password))
+            {
+                return Error.Unauthorized(
+                    "Auth.InvalidCredentials",
+                    "Invalid credentials.");
+            }
+
+            // Generate JWT token
+            var token = _jwtTokenGenerator.GenerateToken(user.Id, user.Email);
+
+            // Create response
+            var response = new LoginResponse
+            {
+                Token = token,
+                TokenType = "Bearer",
+                ExpiresIn = 86400, // 24 hours in seconds
+                User = new UserResponse
+                {
+                    Id = user.Id,
+                    Auth0Id = user.Auth0Id,
+                    Email = user.Email,
+                    CreatedAt = user.CreatedAt
+                }
+            };
+
+            return Result<LoginResponse>.Success(response);
+        }
+        catch (Exception ex)
+        {
+            return Error.Failure(
+                "Auth.LoginFailed",
+                $"An error occurred during login: {ex.Message}");
         }
     }
 }

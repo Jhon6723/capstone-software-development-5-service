@@ -1,6 +1,4 @@
 # service/docker-compose.yml
-version: "3.9"
-
 services:
 
   frontend:
@@ -84,10 +82,13 @@ services:
         max_attempts: 3
 
   db:
-    image: postgres:latest
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
     environment:
       - POSTGRES_PASSWORD=${DB_PASSWORD}
-      - POSTGRES_DB=PixProAuth
+      - POSTGRES_DB=pixpro_auth
+      - POSTGRES_USER=postgres
     volumes:
       - db_data:/var/lib/postgresql/data
     networks:
@@ -116,7 +117,7 @@ services:
 
 networks:
   pixpro_net:
-    external: true
+    driver: bridge
 
 volumes:
   db_data:

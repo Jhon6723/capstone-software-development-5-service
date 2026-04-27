@@ -20,11 +20,16 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.Auth0Id)
             .HasColumnName("auth0_id")
             .HasColumnType("varchar(128)")
-            .IsRequired();
+            .IsRequired(false);
 
         builder.Property(u => u.Email)
             .HasColumnName("email")
             .HasColumnType("varchar(256)")
+            .IsRequired();
+
+        builder.Property(u => u.Password)
+            .HasColumnName("Password")
+            .HasColumnType("text")
             .IsRequired();
 
         builder.Property(u => u.CreatedAt)
