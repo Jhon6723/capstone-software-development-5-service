@@ -1,6 +1,31 @@
 @API_HostAddress = http://localhost:5132
+@API_BaseUrl = {{API_HostAddress}}/api/auth
 
-GET {{API_HostAddress}}/weatherforecast/
+### Health Check
+GET {{API_BaseUrl}}/health
+Accept: application/json
+
+### Register User
+POST {{API_BaseUrl}}/register
+Content-Type: application/json
+
+{
+  "auth0Id": "auth0|test123",
+  "email": "user@example.com",
+  "password": "Password123"
+}
+
+### Login User
+POST {{API_BaseUrl}}/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "Password123"
+}
+
+### Get User by Email
+GET {{API_BaseUrl}}/users/user@example.com
 Accept: application/json
 
 ###
