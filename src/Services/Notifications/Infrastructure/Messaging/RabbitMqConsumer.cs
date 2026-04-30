@@ -1,0 +1,390 @@
+using System.Text;
+using System.Text.Json;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using PixPro.Services.Notifications.Application.DTOs.Requests;
+using PixPro.Services.Notifications.Application.Services;
+using PixPro.Services.Notifications.Domain.Enums;
+using PixPro.Services.Notifications.Infrastructure.Messaging.Events;
+using PixPro.Services.Notifications.Infrastructure.WebSockets;
+using RabbitMQ.Client;
+using RabbitMQ.Client.Events;
+
+namespace PixPro.Services.Notifications.Infrastructure.Messaging;
+
+public class RabbitMqConsumer : BackgroundService
+{
+    private readonly ILogger<RabbitMqConsumer> _logger;
+    private readonly IConfiguration _configuration;
+    private readonly IServiceProvider _serviceProvider;
+    private IConnection? _connection;
+    private IModel? _channel;
+
+    public RabbitMqConsumer(
+        ILogger<RabbitMqConsumer> logger,
+        IConfiguration configuration,
+        IServiceProvider serviceProvider)
+    {
+        _logger = logger;
+        _configuration = configuration;
+        _serviceProvider = serviceProvider;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        await Task.Delay(5000, stoppingToken); // Wait for RabbitMQ to be ready
+
+        try
+        {
+            InitializeRabbitMq();
+            
+            ConsumeQueue("user-events", HandleUserEvent, stoppingToken);
+            ConsumeQueue("project-events", HandleProjectEvent, stoppingToken);
+            ConsumeQueue("notifications", HandleNotificationEvent, stoppingToken);
+            ConsumeQueue("image-processing-events", HandleImageProcessingEvent, stoppingToken);
+
+            _logger.LogInformation("RabbitMQ Consumer started successfully");
+
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                await Task.Delay(1000, stoppingToken);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in RabbitMQ Consumer");
+        }
+    }
+
+    private void InitializeRabbitMq()
+    {
+        var factory = new ConnectionFactory
+        {
+            HostName = _configuration["RabbitMQ:Host"] ?? "localhost",
+            UserName = _configuration["RabbitMQ:Username"] ?? "guest",
+            Password = _configuration["RabbitMQ:Password"] ?? "guest",
+            DispatchConsumersAsync = true
+        };
+
+        _connection = factory.CreateConnection();
+        _channel = _connection.CreateModel();
+
+        // Declare queues
+        _channel.QueueDeclare(queue: "user-events", durable: true, exclusive: false, autoDelete: false);
+        _channel.QueueDeclare(queue: "project-events", durable: true, exclusive: false, autoDelete: false);
+        _channel.QueueDeclare(queue: "image-processing-events", durable: true, exclusive: false, autoDelete: false);
+        _channel.QueueDeclare(queue: "notifications", durable: true, exclusive: false, autoDelete: false);
+
+        _logger.LogInformation("RabbitMQ connection established");
+    }
+
+    private void ConsumeQueue(string queueName, Func<string, Task> messageHandler, CancellationToken stoppingToken)
+    {
+        var consumer = new AsyncEventingBasicConsumer(_channel);
+        
+        consumer.Received += async (model, ea) =>
+        {
+            try
+            {
+                var body = ea.Body.ToArray();
+                var message = Encoding.UTF8.GetString(body);
+                
+                _logger.LogInformation($"Received message from {queueName}: {message}");
+                
+                await messageHandler(message);
+                
+                _channel?.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error processing message from {queueName}");
+                _channel?.BasicNack(deliveryTag: ea.DeliveryTag, multiple: false, requeue: true);
+            }
+        };
+
+        _channel?.BasicConsume(queue: queueName, autoAck: false, consumer: consumer);
+    }
+
+    private async Task HandleUserEvent(string message)
+    {
+        var userEvent = JsonSerializer.Deserialize<UserRegisteredEvent>(message);
+        
+        if (userEvent == null) return;
+
+        using var scope = _serviceProvider.CreateScope();
+        var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+
+        var request = new CreateNotificationRequest(
+            UserId: userEvent.UserId,
+            Type: NotificationType.InApp,
+            Title: "Welcome to PixPro!",
+            Message: $"Hi {userEvent.Name}, welcome to PixPro! We're excited to have you on board.",
+            Metadata: new Dictionary<string, object>
+            {
+                { "eventType", "UserRegistered" },
+                { "email", userEvent.Email }
+            }
+        );
+
+        await notificationService.CreateNotificationAsync(request);
+    }
+
+    private async Task HandleProjectEvent(string message)
+    {
+        try
+        {
+            // Try to deserialize as different project event types
+            using var document = JsonDocument.Parse(message);
+            var root = document.RootElement;
+
+            if (root.TryGetProperty("CreatorId", out _))
+            {
+                var projectEvent = JsonSerializer.Deserialize<ProjectCreatedEvent>(message);
+                if (projectEvent != null)
+                {
+                    await HandleProjectCreated(projectEvent);
+                }
+            }
+            else if (root.TryGetProperty("UpdatedBy", out _))
+            {
+                var projectEvent = JsonSerializer.Deserialize<ProjectUpdatedEvent>(message);
+                if (projectEvent != null)
+                {
+                    await HandleProjectUpdated(projectEvent);
+                }
+            }
+            else if (root.TryGetProperty("AssignedUserId", out _))
+            {
+                var projectEvent = JsonSerializer.Deserialize<ProjectAssignedEvent>(message);
+                if (projectEvent != null)
+                {
+                    await HandleProjectAssigned(projectEvent);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error handling project event");
+        }
+    }
+
+    private async Task HandleProjectCreated(ProjectCreatedEvent projectEvent)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+
+        foreach (var userId in projectEvent.TeamMemberIds)
+        {
+            var request = new CreateNotificationRequest(
+                UserId: userId,
+                Type: NotificationType.InApp,
+                Title: "New Project Created",
+                Message: $"You've been added to project: {projectEvent.ProjectName}",
+                Metadata: new Dictionary<string, object>
+                {
+                    { "eventType", "ProjectCreated" },
+                    { "projectId", projectEvent.ProjectId }
+                }
+            );
+
+            await notificationService.CreateNotificationAsync(request);
+        }
+    }
+
+    private async Task HandleProjectUpdated(ProjectUpdatedEvent projectEvent)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+
+        foreach (var userId in projectEvent.StakeholderIds)
+        {
+            var request = new CreateNotificationRequest(
+                UserId: userId,
+                Type: NotificationType.InApp,
+                Title: "Project Updated",
+                Message: $"Project {projectEvent.ProjectName} has been updated",
+                Metadata: new Dictionary<string, object>
+                {
+                    { "eventType", "ProjectUpdated" },
+                    { "projectId", projectEvent.ProjectId }
+                }
+            );
+
+            await notificationService.CreateNotificationAsync(request);
+        }
+    }
+
+    private async Task HandleProjectAssigned(ProjectAssignedEvent projectEvent)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+
+        var request = new CreateNotificationRequest(
+            UserId: projectEvent.AssignedUserId,
+            Type: NotificationType.InApp,
+            Title: "New Project Assignment",
+            Message: $"You've been assigned to project: {projectEvent.ProjectName}",
+            Metadata: new Dictionary<string, object>
+            {
+                { "eventType", "ProjectAssigned" },
+                { "projectId", projectEvent.ProjectId }
+            }
+        );
+
+        await notificationService.CreateNotificationAsync(request);
+    }
+
+    private async Task HandleNotificationEvent(string message)
+    {
+        var notificationEvent = JsonSerializer.Deserialize<NotificationEvent>(message);
+        
+        if (notificationEvent == null) return;
+
+        using var scope = _serviceProvider.CreateScope();
+        var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+
+        var request = new CreateNotificationRequest(
+            UserId: notificationEvent.UserId,
+            Type: notificationEvent.Type,
+            Title: notificationEvent.Title,
+            Message: notificationEvent.Message,
+            Metadata: notificationEvent.Metadata
+        );
+
+        await notificationService.CreateNotificationAsync(request);
+    }
+
+    private async Task HandleImageProcessingEvent(string message)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(message);
+            var root = document.RootElement;
+
+            // Check if it's a completed or failed event
+            if (root.TryGetProperty("ProcessedImageUrl", out _))
+            {
+                var completedEvent = JsonSerializer.Deserialize<ImageProcessingCompletedEvent>(message);
+                if (completedEvent != null)
+                {
+                    await HandleImageProcessingCompleted(completedEvent);
+                }
+            }
+            else if (root.TryGetProperty("ErrorMessage", out _))
+            {
+                var failedEvent = JsonSerializer.Deserialize<ImageProcessingFailedEvent>(message);
+                if (failedEvent != null)
+                {
+                    await HandleImageProcessingFailed(failedEvent);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error handling image processing event");
+        }
+    }
+
+    private async Task HandleImageProcessingCompleted(ImageProcessingCompletedEvent imageEvent)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+        var webSocketService = scope.ServiceProvider.GetRequiredService<IWebSocketNotificationService>();
+
+        var metadata = new Dictionary<string, object>
+        {
+            { "eventType", "ImageProcessingCompleted" },
+            { "imageId", imageEvent.ImageId },
+            { "imageUrl", imageEvent.ImageUrl },
+            { "processedImageUrl", imageEvent.ProcessedImageUrl },
+            { "completedAt", imageEvent.CompletedAt }
+        };
+
+        // Add processing results to metadata
+        foreach (var result in imageEvent.ProcessingResults)
+        {
+            metadata[$"result_{result.Key}"] = result.Value;
+        }
+
+        // Create notification in database
+        var request = new CreateNotificationRequest(
+            UserId: imageEvent.UserId,
+            Type: NotificationType.Image,
+            Title: "Image Processing Completed",
+            Message: "Your image has been processed successfully!",
+            Metadata: metadata
+        );
+
+        var notificationResult = await notificationService.CreateNotificationAsync(request);
+
+        // Send real-time notification via WebSocket
+        if (notificationResult.IsSuccess && notificationResult.Value != null)
+        {
+            var wsNotification = new
+            {
+                type = "IMAGE_PROCESSING_COMPLETED",
+                notification = notificationResult.Value,
+                timestamp = DateTime.UtcNow
+            };
+
+            await webSocketService.SendNotificationAsync(imageEvent.UserId, wsNotification);
+            _logger.LogInformation($"Image processing completed notification sent to user {imageEvent.UserId}");
+        }
+    }
+
+    private async Task HandleImageProcessingFailed(ImageProcessingFailedEvent imageEvent)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+        var webSocketService = scope.ServiceProvider.GetRequiredService<IWebSocketNotificationService>();
+
+        var metadata = new Dictionary<string, object>
+        {
+            { "eventType", "ImageProcessingFailed" },
+            { "imageId", imageEvent.ImageId },
+            { "imageUrl", imageEvent.ImageUrl },
+            { "errorMessage", imageEvent.ErrorMessage },
+            { "errorCode", imageEvent.ErrorCode },
+            { "failedAt", imageEvent.FailedAt }
+        };
+
+        // Create notification in database
+        var request = new CreateNotificationRequest(
+            UserId: imageEvent.UserId,
+            Type: NotificationType.Image,
+            Title: "Image Processing Failed",
+            Message: $"Failed to process your image: {imageEvent.ErrorMessage}",
+            Metadata: metadata
+        );
+
+        var notificationResult = await notificationService.CreateNotificationAsync(request);
+
+        // Send real-time notification via WebSocket
+        if (notificationResult.IsSuccess && notificationResult.Value != null)
+        {
+            var wsNotification = new
+            {
+                type = "IMAGE_PROCESSING_FAILED",
+                notification = notificationResult.Value,
+                error = new
+                {
+                    message = imageEvent.ErrorMessage,
+                    code = imageEvent.ErrorCode
+                },
+                timestamp = DateTime.UtcNow
+            };
+
+            await webSocketService.SendNotificationAsync(imageEvent.UserId, wsNotification);
+            _logger.LogInformation($"Image processing failed notification sent to user {imageEvent.UserId}");
+        }
+    }
+
+    public override void Dispose()
+    {
+        _channel?.Close();
+        _connection?.Close();
+        base.Dispose();
+    }
+}
