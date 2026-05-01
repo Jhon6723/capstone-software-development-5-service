@@ -81,6 +81,53 @@ services:
         condition: on-failure
         max_attempts: 3
 
+  notifications:
+    image: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/notifications:latest
+    ports:
+      - "8083:8083"
+    networks:
+      - pixpro_net
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__NotificationsDb=mongodb://${NOTIFICATIONS_DB_USER}:${NOTIFICATIONS_DB_PASSWORD}@notifications-db:27017/pixpro_notifications?authSource=admin
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__Username=${RABBITMQ_USER}
+      - RabbitMQ__Password=${RABBITMQ_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ISSUER=${JWT_ISSUER}
+      - JWT_AUDIENCE=${JWT_AUDIENCE}
+    depends_on:
+      - rabbitmq
+      - notifications-db
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    ports:
+      - "5672:5672"      # AMQP port
+      - "15672:15672"    # Management UI
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - pixpro_net
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+
   db:
     image: postgres:16-alpine
     ports:
@@ -115,6 +162,24 @@ services:
         constraints:
           - node.role == manager
 
+  notifications-db:
+    image: mongo:7.0
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${NOTIFICATIONS_DB_USER}
+      - MONGO_INITDB_ROOT_PASSWORD=${NOTIFICATIONS_DB_PASSWORD}
+      - MONGO_INITDB_DATABASE=pixpro_notifications
+    volumes:
+      - notifications_db_data:/data/db
+    networks:
+      - pixpro_net
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+
 networks:
   pixpro_net:
     driver: bridge
@@ -122,3 +187,5 @@ networks:
 volumes:
   db_data:
   projects_db_data:
+  notifications_db_data:
+  rabbitmq_data:
