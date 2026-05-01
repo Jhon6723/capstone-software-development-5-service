@@ -36,6 +36,9 @@ public class WebSocketNotificationService : IWebSocketNotificationService
         {
             while (webSocket.State == WebSocketState.Open)
             {
+                // Clear buffer before each receive
+                Array.Clear(buffer, 0, buffer.Length);
+                
                 var result = await webSocket.ReceiveAsync(
                     new ArraySegment<byte>(buffer), 
                     CancellationToken.None
@@ -58,9 +61,10 @@ public class WebSocketNotificationService : IWebSocketNotificationService
                     _logger.LogInformation($"Received message from {userId}: {message}");
                     
                     // Handle ping/pong or other client messages
-                    if (message.Contains("ping"))
+                    if (message.Contains("ping", StringComparison.OrdinalIgnoreCase))
                     {
                         await SendMessageAsync(webSocket, new { type = "pong", timestamp = DateTime.UtcNow });
+                        _logger.LogInformation($"Pong sent to user {userId}");
                     }
                 }
             }
