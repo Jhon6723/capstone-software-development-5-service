@@ -13,6 +13,7 @@ builder.Services.AddDbContext<ProjectsDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("ProjectsDb")));
 
 builder.Services.AddScoped<IProjectRepository, ProjectRepository>();
+builder.Services.AddScoped<IImageRepository, ImageRepository>();
 
 builder.Services.AddSwaggerGen(options =>
 {
