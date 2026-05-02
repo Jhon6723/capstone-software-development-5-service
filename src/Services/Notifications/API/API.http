@@ -1,0 +1,40 @@
+@Notifications_HostAddress = http://localhost:8083
+@userId = user123
+
+### Health Check
+GET {{Notifications_HostAddress}}/api/notifications
+
+### Create a notification
+POST {{Notifications_HostAddress}}/api/notifications
+Content-Type: application/json
+
+{
+  "userId": "{{userId}}",
+  "type": 2,
+  "title": "Welcome to PixPro",
+  "message": "This is your first notification!",
+  "metadata": {
+    "source": "manual-test"
+  }
+}
+
+### Get notification by ID
+GET {{Notifications_HostAddress}}/api/notifications/{{notificationId}}
+
+### Get user notifications (paginated)
+GET {{Notifications_HostAddress}}/api/notifications/user/{{userId}}?pageSize=20&page=1
+
+### Get unread notifications for user
+GET {{Notifications_HostAddress}}/api/notifications/user/{{userId}}/unread
+
+### Get unread count for user
+GET {{Notifications_HostAddress}}/api/notifications/user/{{userId}}/unread-count
+
+### Mark notification as read
+PUT {{Notifications_HostAddress}}/api/notifications/{{notificationId}}/read
+
+### Mark all notifications as read for user
+PUT {{Notifications_HostAddress}}/api/notifications/user/{{userId}}/read-all
+
+### Delete notification
+DELETE {{Notifications_HostAddress}}/api/notifications/{{notificationId}}
