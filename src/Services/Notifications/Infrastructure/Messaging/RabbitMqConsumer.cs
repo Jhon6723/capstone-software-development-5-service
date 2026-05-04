@@ -271,6 +271,10 @@ public class RabbitMqConsumer : BackgroundService
                 {
                     await HandleImageProcessingCompleted(completedEvent);
                 }
+                else
+                {
+                    _logger.LogWarning("Failed to deserialize ImageProcessingCompletedEvent");
+                }
             }
             else if (root.TryGetProperty("ErrorMessage", out _))
             {
@@ -279,6 +283,14 @@ public class RabbitMqConsumer : BackgroundService
                 {
                     await HandleImageProcessingFailed(failedEvent);
                 }
+                else
+                {
+                    _logger.LogWarning("Failed to deserialize ImageProcessingFailedEvent");
+                }
+            }
+            else
+            {
+                _logger.LogWarning("Unknown image processing event type");
             }
         }
         catch (Exception ex)
@@ -289,97 +301,122 @@ public class RabbitMqConsumer : BackgroundService
 
     private async Task HandleImageProcessingCompleted(ImageProcessingCompletedEvent imageEvent)
     {
-        using var scope = _serviceProvider.CreateScope();
-        var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
-        var webSocketService = scope.ServiceProvider.GetRequiredService<IWebSocketNotificationService>();
-
-        var metadata = new Dictionary<string, object>
+        try
         {
-            { "eventType", "ImageProcessingCompleted" },
-            { "imageId", imageEvent.ImageId },
-            { "imageUrl", imageEvent.ImageUrl },
-            { "processedImageUrl", imageEvent.ProcessedImageUrl },
-            { "completedAt", imageEvent.CompletedAt }
-        };
+            using var scope = _serviceProvider.CreateScope();
+            var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+            var webSocketService = scope.ServiceProvider.GetRequiredService<IWebSocketNotificationService>();
 
-        // Add processing results to metadata
-        foreach (var result in imageEvent.ProcessingResults)
-        {
-            metadata[$"result_{result.Key}"] = result.Value;
-        }
-
-        // Create notification in database
-        var request = new CreateNotificationRequest(
-            UserId: imageEvent.UserId,
-            Type: NotificationType.Image,
-            Title: "Image Processing Completed",
-            Message: "Your image has been processed successfully!",
-            Metadata: metadata
-        );
-
-        var notificationResult = await notificationService.CreateNotificationAsync(request);
-
-        // Send real-time notification via WebSocket
-        if (notificationResult.IsSuccess && notificationResult.Value != null)
-        {
-            var wsNotification = new
+            var metadata = new Dictionary<string, object>
             {
-                type = "IMAGE_PROCESSING_COMPLETED",
-                notification = notificationResult.Value,
-                timestamp = DateTime.UtcNow
+                { "eventType", "ImageProcessingCompleted" },
+                { "imageId", imageEvent.ImageId },
+                { "imageUrl", imageEvent.ImageUrl },
+                { "processedImageUrl", imageEvent.ProcessedImageUrl },
+                { "completedAt", imageEvent.CompletedAt.ToString("O") }
             };
 
-            await webSocketService.SendNotificationAsync(imageEvent.UserId, wsNotification);
-            _logger.LogInformation($"Image processing completed notification sent to user {imageEvent.UserId}");
+            // Serialize processing results as JSON string to avoid JsonElement serialization issues
+            if (imageEvent.ProcessingResults != null && imageEvent.ProcessingResults.Count > 0)
+            {
+                var processingResultsJson = JsonSerializer.Serialize(imageEvent.ProcessingResults);
+                metadata["processingResults"] = processingResultsJson;
+            }
+
+            // Create notification in database
+            var request = new CreateNotificationRequest(
+                UserId: imageEvent.UserId,
+                Type: NotificationType.Image,
+                Title: "Image Processing Completed",
+                Message: "Your image has been processed successfully!",
+                Metadata: metadata
+            );
+
+            var notificationResult = await notificationService.CreateNotificationAsync(request);
+
+            // Send real-time notification via WebSocket
+            if (notificationResult.IsSuccess && notificationResult.Value != null)
+            {
+                var wsNotification = new
+                {
+                    type = "IMAGE_PROCESSING_COMPLETED",
+                    notification = notificationResult.Value,
+                    timestamp = DateTime.UtcNow
+                };
+
+                await webSocketService.SendNotificationAsync(imageEvent.UserId, wsNotification);
+                _logger.LogInformation($"Image processing completed notification sent to user {imageEvent.UserId}");
+            }
+            else
+            {
+                _logger.LogError($"Failed to create notification. Error: {notificationResult.Error}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error in HandleImageProcessingCompleted for user {imageEvent.UserId}");
         }
     }
 
     private async Task HandleImageProcessingFailed(ImageProcessingFailedEvent imageEvent)
     {
-        using var scope = _serviceProvider.CreateScope();
-        var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
-        var webSocketService = scope.ServiceProvider.GetRequiredService<IWebSocketNotificationService>();
-
-        var metadata = new Dictionary<string, object>
+        try
         {
-            { "eventType", "ImageProcessingFailed" },
-            { "imageId", imageEvent.ImageId },
-            { "imageUrl", imageEvent.ImageUrl },
-            { "errorMessage", imageEvent.ErrorMessage },
-            { "errorCode", imageEvent.ErrorCode },
-            { "failedAt", imageEvent.FailedAt }
-        };
+            using var scope = _serviceProvider.CreateScope();
+            var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+            var webSocketService = scope.ServiceProvider.GetRequiredService<IWebSocketNotificationService>();
 
-        // Create notification in database
-        var request = new CreateNotificationRequest(
-            UserId: imageEvent.UserId,
-            Type: NotificationType.Image,
-            Title: "Image Processing Failed",
-            Message: $"Failed to process your image: {imageEvent.ErrorMessage}",
-            Metadata: metadata
-        );
-
-        var notificationResult = await notificationService.CreateNotificationAsync(request);
-
-        // Send real-time notification via WebSocket
-        if (notificationResult.IsSuccess && notificationResult.Value != null)
-        {
-            var wsNotification = new
+            var metadata = new Dictionary<string, object>
             {
-                type = "IMAGE_PROCESSING_FAILED",
-                notification = notificationResult.Value,
-                error = new
-                {
-                    message = imageEvent.ErrorMessage,
-                    code = imageEvent.ErrorCode
-                },
-                timestamp = DateTime.UtcNow
+                { "eventType", "ImageProcessingFailed" },
+                { "imageId", imageEvent.ImageId },
+                { "imageUrl", imageEvent.ImageUrl },
+                { "errorMessage", imageEvent.ErrorMessage },
+                { "errorCode", imageEvent.ErrorCode },
+                { "failedAt", imageEvent.FailedAt.ToString("O") }
             };
 
-            await webSocketService.SendNotificationAsync(imageEvent.UserId, wsNotification);
-            _logger.LogInformation($"Image processing failed notification sent to user {imageEvent.UserId}");
+            // Create notification in database
+            var request = new CreateNotificationRequest(
+                UserId: imageEvent.UserId,
+                Type: NotificationType.Image,
+                Title: "Image Processing Failed",
+                Message: $"Failed to process your image: {imageEvent.ErrorMessage}",
+                Metadata: metadata
+            );
+
+            var notificationResult = await notificationService.CreateNotificationAsync(request);
+
+            // Send real-time notification via WebSocket
+            if (notificationResult.IsSuccess && notificationResult.Value != null)
+            {
+                var wsNotification = new
+                {
+                    type = "IMAGE_PROCESSING_FAILED",
+                    notification = notificationResult.Value,
+                    error = new
+                    {
+                        message = imageEvent.ErrorMessage,
+                        code = imageEvent.ErrorCode
+                    },
+                    timestamp = DateTime.UtcNow
+                };
+
+                await webSocketService.SendNotificationAsync(imageEvent.UserId, wsNotification);
+                _logger.LogInformation($"Image processing failed notification sent to user {imageEvent.UserId}");
+            }
+            else
+            {
+                _logger.LogError($"Failed to create notification. Error: {notificationResult.Error}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error in HandleImageProcessingFailed for user {imageEvent.UserId}");
         }
     }
+        
+    
 
     public override void Dispose()
     {

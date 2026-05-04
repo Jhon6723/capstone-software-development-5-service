@@ -15,6 +15,12 @@ public class NotificationRepository : INotificationRepository
 
     public async Task<Notification> CreateAsync(Notification notification)
     {
+        // Generate unique ID if not provided
+        if (string.IsNullOrEmpty(notification.Id))
+        {
+            notification.Id = Guid.NewGuid().ToString();
+        }
+        
         await _context.Notifications.InsertOneAsync(notification);
         return notification;
     }
