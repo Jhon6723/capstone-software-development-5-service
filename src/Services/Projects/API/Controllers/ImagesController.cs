@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using PixPro.Services.Projects.Domain.Entities;
-using PixPro.Services.Projects.Domain.Repositories;
+using PixPro.Services.Projects.Application.DTOs.Requests;
+using PixPro.Services.Projects.Application.Services;
 
 namespace PixPro.Services.Projects.API.Controllers;
 
@@ -9,30 +9,11 @@ namespace PixPro.Services.Projects.API.Controllers;
 [Produces("application/json")]
 public class ImagesController : ControllerBase
 {
-    private readonly IImageRepository _imageRepository;
-    private readonly IConfiguration _configuration;
-    private readonly ILogger<ImagesController> _logger;
+    private readonly IImageService _imageService;
 
-    private static readonly HashSet<string> AllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
+    public ImagesController(IImageService imageService)
     {
-        ".jpg", ".jpeg", ".png", ".webp"
-    };
-
-    private static readonly HashSet<string> AllowedContentTypes = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "image/jpeg", "image/png", "image/webp"
-    };
-
-    private const long MaxFileSizeBytes = 5 * 1024 * 1024;
-
-    public ImagesController(
-        IImageRepository imageRepository,
-        IConfiguration configuration,
-        ILogger<ImagesController> logger)
-    {
-        _imageRepository = imageRepository;
-        _configuration = configuration;
-        _logger = logger;
+        _imageService = imageService;
     }
 
     [HttpPost("upload")]
@@ -42,42 +23,18 @@ public class ImagesController : ControllerBase
         IFormFile file,
         CancellationToken cancellationToken)
     {
-        if (file is null || file.Length == 0)
-            return BadRequest(new { error = "No file provided." });
-
-        if (file.Length > MaxFileSizeBytes)
-            return BadRequest(new { error = "File exceeds the 5 MB size limit." });
-
-        var extension = Path.GetExtension(file.FileName);
-        if (!AllowedExtensions.Contains(extension))
-            return BadRequest(new { error = $"Extension '{extension}' is not allowed. Use: .jpg, .jpeg, .png, .webp" });
-
-        if (!AllowedContentTypes.Contains(file.ContentType))
-            return BadRequest(new { error = $"Content-Type '{file.ContentType}' is not allowed." });
-
-        
         var ownerId = Guid.TryParse(Request.Headers["X-User-Id"].FirstOrDefault(), out var parsed)
             ? parsed
             : Guid.Parse("00000000-0000-0000-0000-000000000001");
 
-        var basePath = _configuration["Storage:LocalPath"] ?? "uploads/images";
-        Directory.CreateDirectory(basePath);
+        var request = new UploadImageRequest(file, ownerId);
+        var result = await _imageService.UploadAsync(request, cancellationToken);
 
-        var uniqueFileName = $"{Guid.NewGuid()}{extension}";
-        var fullPath = Path.Combine(basePath, uniqueFileName);
-
-        using (var stream = new FileStream(fullPath, FileMode.Create))
+        if (!result.IsSuccess)
         {
-            await file.CopyToAsync(stream, cancellationToken);
+            return BadRequest(new { error = result.Error });
         }
 
-        var image = new Image(file.FileName, file.ContentType, fullPath, ownerId);
-
-        await _imageRepository.AddAsync(image, cancellationToken);
-        await _imageRepository.SaveChangesAsync(cancellationToken);
-
-        _logger.LogInformation("Image uploaded: {ImageId} by Owner: {OwnerId}", image.Id, ownerId);
-
-        return StatusCode(StatusCodes.Status201Created, new { imageId = image.Id });
+        return StatusCode(StatusCodes.Status201Created, result.Value);
     }
 }
