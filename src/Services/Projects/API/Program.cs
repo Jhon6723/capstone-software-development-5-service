@@ -1,8 +1,16 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
+using PixPro.Services.Projects.Application;
 using PixPro.Services.Projects.Domain.Repositories;
 using PixPro.Services.Projects.Infrastructure.Persistence;
 using PixPro.Services.Projects.Infrastructure.Persistence.Repositories;
+
+// Load .env file if it exists (for local development without Docker)
+var envPath = Path.Combine(Directory.GetCurrentDirectory(), "../../../../.env");
+if (File.Exists(envPath))
+{
+    DotNetEnv.Env.Load(envPath);
+}
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +21,8 @@ builder.Services.AddDbContext<ProjectsDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("ProjectsDb")));
 
 builder.Services.AddScoped<IProjectRepository, ProjectRepository>();
+builder.Services.AddScoped<IImageRepository, ImageRepository>();
+builder.Services.AddApplicationServices();
 
 builder.Services.AddSwaggerGen(options =>
 {

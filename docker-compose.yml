@@ -148,6 +148,8 @@ services:
 
   projects-db:
     image: postgres:16-alpine
+    ports:
+      - "5433:5432"
     environment:
       - POSTGRES_DB=pixpro_projects
       - POSTGRES_USER=postgres
