@@ -1,8 +1,10 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PixPro.Services.Auth.Application.DTOs.Responses;
 using PixPro.Services.Auth.Application.Common.Results;
 using PixPro.Services.Auth.Application.DTOs.Requests;
 using PixPro.Services.Auth.Application.Services.Interfaces;
+using System.Security.Claims;
 
 namespace PixPro.Services.Auth.API.Controllers;
 
@@ -42,12 +44,8 @@ public class AuthController : ControllerBase
         if (result.IsSuccess)
         {
             _logger.LogInformation("User registered successfully with ID: {UserId}", result.Value!.Id);
-            return CreatedAtAction(
-                nameof(GetByEmail),
-                new { email = result.Value.Email },
-                result.Value);
+            return CreatedAtAction(nameof(GetByEmail), new { email = result.Value.Email }, result.Value);
         }
-
         return HandleErrorResult(result.Error!);
     }
 
@@ -88,7 +86,6 @@ public class AuthController : ControllerBase
     [HttpGet("users/{email}")]
     [ProducesResponseType(typeof(UserResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
     public async Task<IActionResult> GetByEmail(
         string email,
         CancellationToken cancellationToken)
@@ -96,24 +93,43 @@ public class AuthController : ControllerBase
         _logger.LogInformation("Retrieving user with email: {Email}", email);
 
         var result = await _authService.GetUserByEmailAsync(email, cancellationToken);
-
-        if (result.IsSuccess)
-        {
-            return Ok(result.Value);
-        }
-
+        if (result.IsSuccess) return Ok(result.Value);
         return HandleErrorResult(result.Error!);
     }
 
     /// <summary>
     /// Health check endpoint
     /// </summary>
+    [HttpGet("me")]
+    [Authorize(AuthenticationSchemes = "Auth0")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public IActionResult GetCurrentUser()
+    {
+        var sub = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+               ?? User.FindFirst("sub")?.Value;
+        var email = User.FindFirst(ClaimTypes.Email)?.Value
+                 ?? User.FindFirst("email")?.Value;
+        var name = User.FindFirst("name")?.Value;
+        var picture = User.FindFirst("picture")?.Value;
+
+        _logger.LogInformation("Auth0 user authenticated: {Sub}", sub);
+
+        return Ok(new
+        {
+            sub,
+            email,
+            name,
+            picture,
+            authProvider = "Auth0",
+            authenticatedAt = DateTimeOffset.UtcNow
+        });
+    }
+
     [HttpGet("health")]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public IActionResult Health()
-    {
-        return Ok(new { status = "healthy", timestamp = DateTimeOffset.UtcNow });
-    }
+    public IActionResult Health() =>
+        Ok(new { status = "healthy", timestamp = DateTimeOffset.UtcNow });
 
     private IActionResult HandleErrorResult(Error error)
     {
