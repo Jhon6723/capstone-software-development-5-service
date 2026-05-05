@@ -6,6 +6,7 @@ namespace PixPro.Services.Projects.Infrastructure.Persistence;
 public sealed class ProjectsDbContext(DbContextOptions<ProjectsDbContext> options) : DbContext(options)
 {
     public DbSet<Project> Projects => Set<Project>();
+    public DbSet<Image> Images => Set<Image>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -220,3 +220,5 @@ FakesAssemblies/
 appsettings.*.local.json
 **/appsettings.*.local.json
 scripts/
+
+uploads/
