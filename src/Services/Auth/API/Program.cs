@@ -1,9 +1,13 @@
+using Auth0.AspNetCore.Authentication.Api;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using PixPro.Services.Auth.Application;
 using PixPro.Services.Auth.Domain.Repositories;
 using PixPro.Services.Auth.Infrastructure.Persistence;
 using PixPro.Services.Auth.Infrastructure.Persistence.Repositories;
+using System.Text;
 
 // Load .env file if it exists (for local development without Docker)
 var envPath = Path.Combine(Directory.GetCurrentDirectory(), "../../../../.env");
@@ -13,6 +17,21 @@ if (File.Exists(envPath))
 }
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Configuration["ConnectionStrings:AuthDb"] =
+    Environment.GetEnvironmentVariable("AUTH_DB_CONNECTION") ?? "";
+builder.Configuration["Auth0:Domain"] =
+    Environment.GetEnvironmentVariable("AUTH0_DOMAIN") ?? "";
+builder.Configuration["Auth0:Audience"] =
+    Environment.GetEnvironmentVariable("AUTH0_AUDIENCE") ?? "";
+builder.Configuration["Jwt:Secret"] =
+    Environment.GetEnvironmentVariable("JWT_SECRET") ?? "";
+builder.Configuration["Jwt:Issuer"] =
+    Environment.GetEnvironmentVariable("JWT_ISSUER") ?? "";
+builder.Configuration["Jwt:Audience"] =
+    Environment.GetEnvironmentVariable("JWT_AUDIENCE") ?? "";
+builder.Configuration["Jwt:ExpirationMinutes"] =
+    Environment.GetEnvironmentVariable("JWT_EXPIRATION_MINUTES") ?? "60";
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -25,6 +44,70 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 
 // Register Application services
 builder.Services.AddApplicationServices();
+
+var auth0Domain = builder.Configuration["Auth0:Domain"]!;
+var auth0Audience = builder.Configuration["Auth0:Audience"]!;
+var jwtSecret = builder.Configuration["Jwt:Secret"]!;
+var jwtIssuer = builder.Configuration["Jwt:Issuer"]!;
+var jwtAudience = builder.Configuration["Jwt:Audience"]!;
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = "DualScheme";
+    options.DefaultChallengeScheme = "DualScheme";
+})
+
+.AddJwtBearer("Auth0", options =>
+{
+    options.Authority = $"https://{auth0Domain}";
+    options.Audience = auth0Audience;
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidIssuer = $"https://{auth0Domain}/",
+        ValidateAudience = true,
+        ValidAudience = auth0Audience,
+        ValidateLifetime = true
+    };
+})
+
+.AddJwtBearer("Local", options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidIssuer = jwtIssuer,
+        ValidateAudience = true,
+        ValidAudience = jwtAudience,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(
+            Encoding.UTF8.GetBytes(jwtSecret))
+    };
+})
+
+.AddPolicyScheme("DualScheme", "Auth0 or Local JWT", options =>
+{
+    options.ForwardDefaultSelector = context =>
+    {
+        var authHeader = context.Request.Headers["Authorization"].FirstOrDefault();
+        if (authHeader?.StartsWith("Bearer ") == true)
+        {
+            var token = authHeader["Bearer ".Length..].Trim();
+            var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+            if (handler.CanReadToken(token))
+            {
+                var jwt = handler.ReadJwtToken(token);
+                var issuer = jwt.Issuer;
+                if (issuer.Contains(auth0Domain))
+                    return "Auth0";
+            }
+        }
+        return "Local";
+    };
+});
+
+builder.Services.AddAuthorization();
 
 builder.Services.AddSwaggerGen(options =>
 {
@@ -42,11 +125,12 @@ builder.Services.AddSwaggerGen(options =>
 
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
-        Description = "JWT Authorization header using the Bearer scheme. Enter 'Bearer' [space] and then your token",
+        Description = "JWT Authorization header. It supports Auth0 tokens and local tokens.",
         Name = "Authorization",
         In = ParameterLocation.Header,
-        Type = SecuritySchemeType.ApiKey,
-        Scheme = "Bearer"
+        Type = SecuritySchemeType.Http,
+        Scheme = "Bearer",
+        BearerFormat = "JWT"
     });
 
     options.AddSecurityRequirement(new OpenApiSecurityRequirement
