@@ -1,4 +1,5 @@
 @Gateway_HostAddress = http://localhost:5000
+@access_token = YOUR_JWT_TOKEN_HERE
 
 ### Gateway Health Check
 GET {{Gateway_HostAddress}}/health
@@ -16,7 +17,7 @@ Accept: application/json
 
 ###
 
-### Register New User (POST)
+### Register New User (POST) - Public endpoint
 POST {{Gateway_HostAddress}}/api/auth/register
 Content-Type: application/json
 
@@ -29,7 +30,8 @@ Content-Type: application/json
 
 ###
 
-### Login User (POST)
+### Login User (POST) - Public endpoint
+# Save the token from response to use in protected endpoints
 POST {{Gateway_HostAddress}}/api/auth/login
 Content-Type: application/json
 
@@ -40,20 +42,61 @@ Content-Type: application/json
 
 ###
 
-### Get User by Email (GET)
+### Get User by Email (GET) - Public endpoint
 GET {{Gateway_HostAddress}}/api/auth/users/test@example.com
 Accept: application/json
 
 ###
 
 # ========================================
-# US-44: Projects Service Routes via Gateway
+# US-46: JWT Authentication on Gateway
 # ========================================
 
-### Upload Image (POST with file - Large file upload support)
+### Test Protected Endpoint WITHOUT Token (Should return 401 Unauthorized)
+POST {{Gateway_HostAddress}}/api/notifications
+Content-Type: application/json
+
+{
+  "userId": "00000000-0000-0000-0000-000000000001",
+  "type": "info",
+  "title": "Test Notification",
+  "message": "This should fail without a token"
+}
+
+###
+
+### Test Protected Endpoint WITH Valid Token (Should succeed)
+# First login above to get a token, then paste it in @access_token variable
+POST {{Gateway_HostAddress}}/api/notifications
+Content-Type: application/json
+Authorization: Bearer {{access_token}}
+
+{
+  "userId": "00000000-0000-0000-0000-000000000001",
+  "type": "info",
+  "title": "Test Notification",
+  "message": "This should succeed with valid token"
+}
+
+###
+
+### Get Notification WITH Token
+GET {{Gateway_HostAddress}}/api/notifications/123456
+Accept: application/json
+Authorization: Bearer {{access_token}}
+
+###
+
+# ========================================
+# US-44: Projects Service Routes via Gateway
+# (Now requires JWT authentication)
+# ========================================
+
+### Upload Image WITH Token (POST with file - Large file upload support)
 # Note: Replace with actual file path for testing
 POST {{Gateway_HostAddress}}/api/images/upload
 Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+Authorization: Bearer {{access_token}}
 X-User-Id: 00000000-0000-0000-0000-000000000001
 
 ------WebKitFormBoundary7MA4YWxkTrZu0gW
@@ -66,31 +109,14 @@ Content-Type: image/jpeg
 ###
 
 # ========================================
-# US-45: Notifications Service Routes via Gateway
+# US-45: Notifications Service Routes via Gateway  
+# (WebSocket and API now require JWT authentication)
 # ========================================
 
-### WebSocket Status Check
+### WebSocket Status Check WITH Token
 GET {{Gateway_HostAddress}}/api/websocket/status
 Accept: application/json
-
-###
-
-### Create Notification (POST)
-POST {{Gateway_HostAddress}}/api/notifications
-Content-Type: application/json
-
-{
-  "userId": "00000000-0000-0000-0000-000000000001",
-  "type": "info",
-  "title": "Test Notification",
-  "message": "This is a test notification through the gateway"
-}
-
-###
-
-### Get Notification by ID (GET)
-GET {{Gateway_HostAddress}}/api/notifications/123456
-Accept: application/json
+Authorization: Bearer {{access_token}}
 
 ###
 
