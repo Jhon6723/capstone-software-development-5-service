@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PixPro.Services.Notifications.Application.DTOs.Requests;
 using PixPro.Services.Notifications.Application.Services;
@@ -18,7 +19,7 @@ public class NotificationsController : ControllerBase
         _notificationService = notificationService;
         _logger = logger;
     }
-
+    [Authorize]
     [HttpPost]
     public async Task<IActionResult> CreateNotification([FromBody] CreateNotificationRequest request)
     {
@@ -35,7 +36,7 @@ public class NotificationsController : ControllerBase
             result.Value
         );
     }
-
+    [Authorize]
     [HttpGet("{id}")]
     public async Task<IActionResult> GetNotification(string id)
     {
@@ -48,7 +49,7 @@ public class NotificationsController : ControllerBase
 
         return Ok(result.Value);
     }
-
+    [Authorize]
     [HttpGet("user/{userId}")]
     public async Task<IActionResult> GetUserNotifications(
         string userId,
@@ -66,6 +67,7 @@ public class NotificationsController : ControllerBase
         return Ok(result.Value);
     }
 
+    [Authorize]
     [HttpGet("user/{userId}/unread")]
     public async Task<IActionResult> GetUnreadNotifications(string userId)
     {
@@ -79,6 +81,7 @@ public class NotificationsController : ControllerBase
         return Ok(result.Value);
     }
 
+    [Authorize]
     [HttpGet("user/{userId}/unread-count")]
     public async Task<IActionResult> GetUnreadCount(string userId)
     {
@@ -92,6 +95,7 @@ public class NotificationsController : ControllerBase
         return Ok(new { count = result.Value });
     }
 
+    [Authorize]
     [HttpPut("{id}/read")]
     public async Task<IActionResult> MarkAsRead(string id)
     {
@@ -105,6 +109,7 @@ public class NotificationsController : ControllerBase
         return NoContent();
     }
 
+    [Authorize]
     [HttpPut("user/{userId}/read-all")]
     public async Task<IActionResult> MarkAllAsRead(string userId)
     {
@@ -118,6 +123,7 @@ public class NotificationsController : ControllerBase
         return NoContent();
     }
 
+    [Authorize]
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteNotification(string id)
     {
