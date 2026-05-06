@@ -50,9 +50,18 @@ Accept: application/json
 # US-44: Projects Service Routes via Gateway
 # ========================================
 
-### Test Projects Route (GET)
-GET {{Gateway_HostAddress}}/api/projects
-Accept: application/json
+### Upload Image (POST with file - Large file upload support)
+# Note: Replace with actual file path for testing
+POST {{Gateway_HostAddress}}/api/images/upload
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+X-User-Id: 00000000-0000-0000-0000-000000000001
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="file"; filename="test-image.jpg"
+Content-Type: image/jpeg
+
+< ./path/to/your/test-image.jpg
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
 
 ###
 
@@ -60,8 +69,35 @@ Accept: application/json
 # US-45: Notifications Service Routes via Gateway
 # ========================================
 
-### Test Notifications Route (GET)
-GET {{Gateway_HostAddress}}/api/notifications
+### WebSocket Status Check
+GET {{Gateway_HostAddress}}/api/websocket/status
 Accept: application/json
+
+###
+
+### Create Notification (POST)
+POST {{Gateway_HostAddress}}/api/notifications
+Content-Type: application/json
+
+{
+  "userId": "00000000-0000-0000-0000-000000000001",
+  "type": "info",
+  "title": "Test Notification",
+  "message": "This is a test notification through the gateway"
+}
+
+###
+
+### Get Notification by ID (GET)
+GET {{Gateway_HostAddress}}/api/notifications/123456
+Accept: application/json
+
+###
+
+# WebSocket Connection (Use with WebSocket client or JavaScript)
+# Connect to: ws://localhost:5000/api/websocket/connect?access_token=YOUR_JWT_TOKEN
+# JavaScript example:
+# const ws = new WebSocket('ws://localhost:5000/api/websocket/connect?access_token=' + token);
+# ws.onmessage = (event) => console.log('Notification:', event.data);
 
 ###
