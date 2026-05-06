@@ -1,18 +1,66 @@
 @Gateway_HostAddress = http://localhost:5000
 
-### Health Check
+### Gateway Health Check
 GET {{Gateway_HostAddress}}/health
 Accept: application/json
 
-### Test Auth Route
-GET {{Gateway_HostAddress}}/api/auth/users
+###
+
+# ========================================
+# US-43: Auth Service Routes via Gateway
+# ========================================
+
+### Auth Service Health Check (GET)
+GET {{Gateway_HostAddress}}/api/auth/health
 Accept: application/json
 
-### Test Projects Route
+###
+
+### Register New User (POST)
+POST {{Gateway_HostAddress}}/api/auth/register
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "password": "Test123!@#",
+  "firstName": "Test",
+  "lastName": "User"
+}
+
+###
+
+### Login User (POST)
+POST {{Gateway_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "test@example.com",
+  "password": "Test123!@#"
+}
+
+###
+
+### Get User by Email (GET)
+GET {{Gateway_HostAddress}}/api/auth/users/test@example.com
+Accept: application/json
+
+###
+
+# ========================================
+# US-44: Projects Service Routes via Gateway
+# ========================================
+
+### Test Projects Route (GET)
 GET {{Gateway_HostAddress}}/api/projects
 Accept: application/json
 
-### Test Notifications Route
+###
+
+# ========================================
+# US-45: Notifications Service Routes via Gateway
+# ========================================
+
+### Test Notifications Route (GET)
 GET {{Gateway_HostAddress}}/api/notifications
 Accept: application/json
 
