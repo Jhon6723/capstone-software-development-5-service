@@ -1,6 +1,6 @@
 @Gateway_HostAddress = http://localhost:5000
-@access_token = YOUR_JWT_TOKEN_HERE
-
+@access_token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhNmYwNzk4NS1mOGRlLTQ4ZmItOTExYi02YmRlMjUwNGYzMWUiLCJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20iLCJqdGkiOiI3NzBjODA4My1kOTZjLTQ0ODYtOTAwMi1jNGJhYWI3ZTk1NTciLCJpYXQiOjE3NzgxMDUyNTMsImV4cCI6MTc3ODEwODg1MywiaXNzIjoiaHR0cHM6Ly9hcGkucGl4cHJvLmNvbSIsImF1ZCI6Imh0dHBzOi8vYXBpLnBpeHByby5jb20ifQ.dixQhLmdeCWs-8b2tXxCktbTEbMpoL9Ka55XerrGxlk
+@userId = a6f07985-f8de-48fb-911b-6bde2504f31e
 # ========================================
 # Error Handling & Standardization (US-52)
 # ========================================
@@ -55,10 +55,8 @@ POST {{Gateway_HostAddress}}/api/auth/register
 Content-Type: application/json
 
 {
-  "email": "test@example.com",
-  "password": "Test123!@#",
-  "firstName": "Test",
-  "lastName": "User"
+  "email": "test1@example.com",
+  "password": "Test123!"
 }
 
 ###
@@ -69,14 +67,14 @@ POST {{Gateway_HostAddress}}/api/auth/login
 Content-Type: application/json
 
 {
-  "email": "test@example.com",
-  "password": "Test123!@#"
+  "email": "test1@example.com",
+  "password": "Test123!"
 }
 
 ###
 
 ### Get User by Email (GET) - Public endpoint
-GET {{Gateway_HostAddress}}/api/auth/users/test@example.com
+GET {{Gateway_HostAddress}}/api/auth/users/test1@example.com
 Accept: application/json
 
 ###
@@ -105,10 +103,13 @@ Content-Type: application/json
 Authorization: Bearer {{access_token}}
 
 {
-  "userId": "00000000-0000-0000-0000-000000000001",
-  "type": "info",
-  "title": "Test Notification",
-  "message": "This should succeed with valid token"
+  "userId": "{{userId}}",
+  "type": 2,
+  "title": "Welcome to PixPro",
+  "message": "This is your first notification!",
+  "metadata": {
+    "source": "manual-test"
+  }
 }
 
 ###

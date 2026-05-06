@@ -7,5 +7,5 @@ public record CreateNotificationRequest(
     NotificationType Type,
     string Title,
     string Message,
-    Dictionary<string, object>? Metadata = null
+    Dictionary<string, string>? Metadata = null
 );

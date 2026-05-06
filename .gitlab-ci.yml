@@ -8,6 +8,7 @@ variables:
   REGISTRY_GATEWAY: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/gateway
   REGISTRY_AUTH: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/auth
   REGISTRY_PROJECTS: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/projects
+  REGISTRY_NOTIFICATIONS: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/notifications
 
 build:gateway:
   stage: build
@@ -42,6 +43,17 @@ build:projects:
       - src/Services/Projects/API/bin/
     expire_in: 1 hour
 
+build:notifications:
+  stage: build
+  image: mcr.microsoft.com/dotnet/sdk:9.0
+  script:
+    - dotnet restore src/Services/Notifications/API/API.csproj
+    - dotnet build src/Services/Notifications/API/API.csproj --no-restore -c Release
+  artifacts:
+    paths:
+      - src/Services/Notifications/API/bin/
+    expire_in: 1 hour
+
 test:gateway:
   stage: test
   image: mcr.microsoft.com/dotnet/sdk:9.0
@@ -72,6 +84,38 @@ test:auth:
     when: always
     reports:
       junit: src/Services/Auth/API/test-results.xml
+    expire_in: 1 week
+
+test:projects:
+  stage: test
+  image: mcr.microsoft.com/dotnet/sdk:9.0
+  allow_failure: true
+  dependencies:
+    - build:projects
+  script:
+    - dotnet test src/Services/Projects/API/API.csproj
+      --no-build -c Release
+      --logger "junit;LogFilePath=test-results.xml"
+  artifacts:
+    when: always
+    reports:
+      junit: src/Services/Projects/API/test-results.xml
+    expire_in: 1 week
+
+test:notifications:
+  stage: test
+  image: mcr.microsoft.com/dotnet/sdk:9.0
+  allow_failure: true
+  dependencies:
+    - build:notifications
+  script:
+    - dotnet test src/Services/Notifications/API/API.csproj
+      --no-build -c Release
+      --logger "junit;LogFilePath=test-results.xml"
+  artifacts:
+    when: always
+    reports:
+      junit: src/Services/Notifications/API/test-results.xml
     expire_in: 1 week
 
 docker:gateway:
@@ -128,6 +172,24 @@ docker:projects:
     - docker push $REGISTRY_PROJECTS:$CI_COMMIT_SHA
     - docker push $REGISTRY_PROJECTS:latest
 
+docker:notifications:
+  stage: docker
+  image: docker:27
+  services:
+    - docker:27-dind
+  dependencies:
+    - build:notifications
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+  script:
+    - docker build
+      -t $REGISTRY_NOTIFICATIONS:$CI_COMMIT_SHA
+      -t $REGISTRY_NOTIFICATIONS:latest
+      -f src/Services/Notifications/API/Dockerfile
+      .
+    - docker push $REGISTRY_NOTIFICATIONS:$CI_COMMIT_SHA
+    - docker push $REGISTRY_NOTIFICATIONS:latest
+
 deploy:swarm:
   stage: deploy
   image: alpine:3.19
@@ -164,4 +226,12 @@ deploy:swarm:
       --update-failure-action rollback
       --update-order start-first
       pixpro_projects
+      &&
+      docker service update
+      --image $REGISTRY_NOTIFICATIONS:$CI_COMMIT_SHA
+      --update-parallelism 1
+      --update-delay 10s
+      --update-failure-action rollback
+      --update-order start-first
+      pixpro_notifications
       "
