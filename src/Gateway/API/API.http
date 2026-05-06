@@ -1,6 +1,19 @@
-@API_HostAddress = http://localhost:5286
+@Gateway_HostAddress = http://localhost:5000
 
-GET {{API_HostAddress}}/weatherforecast/
+### Health Check
+GET {{Gateway_HostAddress}}/health
+Accept: application/json
+
+### Test Auth Route
+GET {{Gateway_HostAddress}}/api/auth/users
+Accept: application/json
+
+### Test Projects Route
+GET {{Gateway_HostAddress}}/api/projects
+Accept: application/json
+
+### Test Notifications Route
+GET {{Gateway_HostAddress}}/api/notifications
 Accept: application/json
 
 ###
