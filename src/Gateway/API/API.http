@@ -1,6 +1,20 @@
 @Gateway_HostAddress = http://localhost:5000
 @access_token = YOUR_JWT_TOKEN_HERE
 
+# ========================================
+# Load Balancing Configuration (US-51)
+# ========================================
+# The Gateway now supports load balancing with:
+# - Round-robin distribution across multiple instances
+# - Active health checks every 30 seconds
+# - Automatic removal of failed instances
+#
+# To add more instances, edit appsettings.json Clusters section:
+# "Destinations": {
+#   "service-api-1": { "Address": "http://localhost:5001" },
+#   "service-api-2": { "Address": "http://localhost:5011" }
+# }
+
 ### Gateway Health Check
 GET {{Gateway_HostAddress}}/health
 Accept: application/json
