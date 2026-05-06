@@ -2,6 +2,25 @@
 @access_token = YOUR_JWT_TOKEN_HERE
 
 # ========================================
+# Error Handling & Standardization (US-52)
+# ========================================
+# The Gateway provides consistent error responses with:
+# - Standard format: { statusCode, message, details, source, timestamp }
+# - Proper HTTP status codes (400, 401, 502, 504, etc.)
+# - Gateway errors distinguished by "source": "Gateway"
+# - Circuit breaker (passive health checks) with 1-minute reactivation
+# - Automatic failover when downstream services fail
+#
+# Error Response Example:
+# {
+#   "statusCode": 502,
+#   "message": "Service unavailable",
+#   "details": "Unable to reach downstream service",
+#   "source": "Gateway",
+#   "timestamp": "2026-05-06T10:30:00Z"
+# }
+
+# ========================================
 # Load Balancing Configuration (US-51)
 # ========================================
 # The Gateway now supports load balancing with:
