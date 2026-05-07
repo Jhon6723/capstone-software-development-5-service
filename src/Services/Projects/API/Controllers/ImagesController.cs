@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PixPro.Services.Projects.Application.DTOs.Requests;
 using PixPro.Services.Projects.Application.Services;
@@ -17,13 +18,14 @@ public class ImagesController : ControllerBase
     }
 
     [HttpPost("upload")]
+    [Authorize]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Upload(
         IFormFile file,
         CancellationToken cancellationToken)
     {
-        var ownerId = Guid.TryParse(Request.Headers["X-User-Id"].FirstOrDefault(), out var parsed)
+        var ownerId = Guid.TryParse(User.FindFirst("sub")?.Value, out var parsed)
             ? parsed
             : Guid.Parse("00000000-0000-0000-0000-000000000001");
 
