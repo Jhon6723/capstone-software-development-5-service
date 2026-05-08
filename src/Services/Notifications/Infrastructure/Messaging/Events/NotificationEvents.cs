@@ -34,7 +34,7 @@ public record NotificationEvent(
     NotificationType Type,
     string Title,
     string Message,
-    Dictionary<string, object>? Metadata = null
+    Dictionary<string, string>? Metadata = null
 );
 
 public record ImageProcessingCompletedEvent(
@@ -42,7 +42,7 @@ public record ImageProcessingCompletedEvent(
     string UserId,
     string ImageUrl,
     string ProcessedImageUrl,
-    Dictionary<string, object> ProcessingResults,
+    Dictionary<string, string> ProcessingResults,
     DateTime CompletedAt
 );
 

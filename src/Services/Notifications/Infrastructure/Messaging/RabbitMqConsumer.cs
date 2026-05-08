@@ -121,7 +121,7 @@ public class RabbitMqConsumer : BackgroundService
             Type: NotificationType.InApp,
             Title: "Welcome to PixPro!",
             Message: $"Hi {userEvent.Name}, welcome to PixPro! We're excited to have you on board.",
-            Metadata: new Dictionary<string, object>
+            Metadata: new Dictionary<string, string>
             {
                 { "eventType", "UserRegistered" },
                 { "email", userEvent.Email }
@@ -182,7 +182,7 @@ public class RabbitMqConsumer : BackgroundService
                 Type: NotificationType.InApp,
                 Title: "New Project Created",
                 Message: $"You've been added to project: {projectEvent.ProjectName}",
-                Metadata: new Dictionary<string, object>
+                Metadata: new Dictionary<string, string>
                 {
                     { "eventType", "ProjectCreated" },
                     { "projectId", projectEvent.ProjectId }
@@ -205,7 +205,7 @@ public class RabbitMqConsumer : BackgroundService
                 Type: NotificationType.InApp,
                 Title: "Project Updated",
                 Message: $"Project {projectEvent.ProjectName} has been updated",
-                Metadata: new Dictionary<string, object>
+                Metadata: new Dictionary<string, string>
                 {
                     { "eventType", "ProjectUpdated" },
                     { "projectId", projectEvent.ProjectId }
@@ -226,7 +226,7 @@ public class RabbitMqConsumer : BackgroundService
             Type: NotificationType.InApp,
             Title: "New Project Assignment",
             Message: $"You've been assigned to project: {projectEvent.ProjectName}",
-            Metadata: new Dictionary<string, object>
+            Metadata: new Dictionary<string, string>
             {
                 { "eventType", "ProjectAssigned" },
                 { "projectId", projectEvent.ProjectId }
@@ -307,7 +307,7 @@ public class RabbitMqConsumer : BackgroundService
             var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
             var webSocketService = scope.ServiceProvider.GetRequiredService<IWebSocketNotificationService>();
 
-            var metadata = new Dictionary<string, object>
+            var metadata = new Dictionary<string, string>
             {
                 { "eventType", "ImageProcessingCompleted" },
                 { "imageId", imageEvent.ImageId },
@@ -366,7 +366,7 @@ public class RabbitMqConsumer : BackgroundService
             var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
             var webSocketService = scope.ServiceProvider.GetRequiredService<IWebSocketNotificationService>();
 
-            var metadata = new Dictionary<string, object>
+            var metadata = new Dictionary<string, string>
             {
                 { "eventType", "ImageProcessingFailed" },
                 { "imageId", imageEvent.ImageId },

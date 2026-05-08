@@ -10,5 +10,5 @@ public record NotificationResponse(
     string Message,
     bool IsRead,
     DateTime CreatedAt,
-    Dictionary<string, object>? Metadata
+    Dictionary<string, string>? Metadata
 );

@@ -1,4 +1,6 @@
 // Load .env file if it exists (for local development without Docker)
+using API.Middleware;
+
 var envPath = Path.Combine(Directory.GetCurrentDirectory(), "../../../.env");
 if (File.Exists(envPath))
 {
@@ -85,6 +87,9 @@ builder.Services.AddReverseProxy()
 builder.Services.AddHealthChecks();
 
 var app = builder.Build();
+
+// Global exception handling middleware (must be first)
+app.UseMiddleware<GlobalExceptionHandlerMiddleware>();
 
 // Configure the HTTP request pipeline.
 app.UseHttpsRedirection();
