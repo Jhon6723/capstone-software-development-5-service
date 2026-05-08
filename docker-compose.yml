@@ -70,6 +70,12 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - ConnectionStrings__ProjectsDb=Host=projects-db;Port=5432;Database=pixpro_projects;Username=postgres;Password=${PROJECTS_DB_PASSWORD}
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__Username=${RABBITMQ_USER}
+      - RabbitMQ__Password=${RABBITMQ_PASSWORD}
+    depends_on:
+      - rabbitmq
+      - projects-db
     deploy:
       replicas: 2
       update_config:
