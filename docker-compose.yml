@@ -26,7 +26,12 @@ services:
       - pixpro_net
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - AuthService__BaseUrl=http://auth:8081
+      - Jwt__Secret=${JWT_SECRET}
+      - Jwt__Issuer=${JWT_ISSUER}
+      - Jwt__Audience=${JWT_AUDIENCE}
+      - ReverseProxy__Clusters__auth-cluster__Destinations__auth-api-1__Address=http://auth:8081
+      - ReverseProxy__Clusters__projects-cluster__Destinations__projects-api-1__Address=http://projects:8082
+      - ReverseProxy__Clusters__notifications-cluster__Destinations__notifications-api-1__Address=http://notifications:8083
     deploy:
       replicas: 2
       update_config:
@@ -43,8 +48,8 @@ services:
 
   auth:
     image: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/auth:latest
-    ports:
-      - "8081:8081"
+    expose:
+      - "8081"
     networks:
       - pixpro_net
     environment:
@@ -63,8 +68,8 @@ services:
 
   projects:
     image: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/projects:latest
-    ports:
-      - "8082:8082"
+    expose:
+      - "8082"
     networks:
       - pixpro_net
     environment:
@@ -83,8 +88,8 @@ services:
 
   notifications:
     image: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/notifications:latest
-    ports:
-      - "8083:8083"
+    expose:
+      - "8083"
     networks:
       - pixpro_net
     environment:
