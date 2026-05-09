@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using PixPro.Services.Notifications.Application.Commands.CreateNotification;
 using PixPro.Services.Notifications.Application.Commands.MarkAsRead;
 using PixPro.Services.Notifications.Application.Commands.MarkAllAsRead;
+using PixPro.Services.Notifications.Application.Queries.GetUserNotifications;
 using PixPro.Services.Notifications.Application.DTOs.Requests;
 using PixPro.Services.Notifications.Application.Services;
 
@@ -60,6 +61,9 @@ public class NotificationsController : ControllerBase
 
         return Ok(result.Value);
     }
+    /// <summary>
+    /// Get user notifications using CQRS pattern with MediatR
+    /// </summary>
     [Authorize]
     [HttpGet("user/{userId}")]
     public async Task<IActionResult> GetUserNotifications(
@@ -67,8 +71,8 @@ public class NotificationsController : ControllerBase
         [FromQuery] int pageSize = 20,
         [FromQuery] int page = 1)
     {
-        var request = new GetNotificationsRequest(userId, pageSize, page);
-        var result = await _notificationService.GetUserNotificationsAsync(request);
+        var query = new GetUserNotificationsQuery(userId, pageSize, page);
+        var result = await _mediator.Send(query);
 
         if (!result.IsSuccess)
         {
