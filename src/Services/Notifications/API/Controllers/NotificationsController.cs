@@ -5,6 +5,7 @@ using PixPro.Services.Notifications.Application.Commands.CreateNotification;
 using PixPro.Services.Notifications.Application.Commands.MarkAsRead;
 using PixPro.Services.Notifications.Application.Commands.MarkAllAsRead;
 using PixPro.Services.Notifications.Application.Queries.GetUserNotifications;
+using PixPro.Services.Notifications.Application.Queries.GetUnreadCount;
 using PixPro.Services.Notifications.Application.DTOs.Requests;
 using PixPro.Services.Notifications.Application.Services;
 
@@ -96,11 +97,15 @@ public class NotificationsController : ControllerBase
         return Ok(result.Value);
     }
 
+    /// <summary>
+    /// Get unread count using CQRS pattern with MediatR
+    /// </summary>
     [Authorize]
     [HttpGet("user/{userId}/unread-count")]
     public async Task<IActionResult> GetUnreadCount(string userId)
     {
-        var result = await _notificationService.GetUnreadCountAsync(userId);
+        var query = new GetUnreadCountQuery(userId);
+        var result = await _mediator.Send(query);
 
         if (!result.IsSuccess)
         {
