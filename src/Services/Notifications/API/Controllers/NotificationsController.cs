@@ -6,6 +6,7 @@ using PixPro.Services.Notifications.Application.Commands.MarkAsRead;
 using PixPro.Services.Notifications.Application.Commands.MarkAllAsRead;
 using PixPro.Services.Notifications.Application.Queries.GetUserNotifications;
 using PixPro.Services.Notifications.Application.Queries.GetUnreadCount;
+using PixPro.Services.Notifications.Application.Queries.GetNotificationById;
 using PixPro.Services.Notifications.Application.DTOs.Requests;
 using PixPro.Services.Notifications.Application.Services;
 
@@ -49,11 +50,15 @@ public class NotificationsController : ControllerBase
             result.Value
         );
     }
+    /// <summary>
+    /// Get notification by ID using CQRS pattern with MediatR
+    /// </summary>
     [Authorize]
     [HttpGet("{id}")]
     public async Task<IActionResult> GetNotification(string id)
     {
-        var result = await _notificationService.GetNotificationByIdAsync(id);
+        var query = new GetNotificationByIdQuery(id);
+        var result = await _mediator.Send(query);
 
         if (!result.IsSuccess)
         {
