@@ -1,12 +1,16 @@
 using System.Text;
 using System.Text.Json;
+using MediatR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using PixPro.Services.Notifications.Application.Commands.CreateNotification;
 using PixPro.Services.Notifications.Application.DTOs.Requests;
+using PixPro.Services.Notifications.Application.DTOs.Responses;
 using PixPro.Services.Notifications.Application.Services;
 using PixPro.Services.Notifications.Domain.Enums;
+using PixPro.Services.Notifications.Domain.Events;
 using PixPro.Services.Notifications.Infrastructure.Messaging.Events;
 using PixPro.Services.Notifications.Infrastructure.WebSockets;
 using RabbitMQ.Client;
@@ -40,10 +44,14 @@ public class RabbitMqConsumer : BackgroundService
         {
             InitializeRabbitMq();
             
+            // External events (inter-microservice communication)
             ConsumeQueue("user-events", HandleUserEvent, stoppingToken);
             ConsumeQueue("project-events", HandleProjectEvent, stoppingToken);
             ConsumeQueue("notifications", HandleNotificationEvent, stoppingToken);
             ConsumeQueue("image-processing-events", HandleImageProcessingEvent, stoppingToken);
+            
+            // Internal domain events (CQRS synchronization to Redis)
+            ConsumeQueue("notification-domain-events", HandleDomainEvent, stoppingToken);
 
             _logger.LogInformation("RabbitMQ Consumer started successfully");
 
@@ -71,11 +79,14 @@ public class RabbitMqConsumer : BackgroundService
         _connection = factory.CreateConnection();
         _channel = _connection.CreateModel();
 
-        // Declare queues
+        // Declare queues for external events (inter-microservice communication)
         _channel.QueueDeclare(queue: "user-events", durable: true, exclusive: false, autoDelete: false);
         _channel.QueueDeclare(queue: "project-events", durable: true, exclusive: false, autoDelete: false);
         _channel.QueueDeclare(queue: "image-processing-events", durable: true, exclusive: false, autoDelete: false);
         _channel.QueueDeclare(queue: "notifications", durable: true, exclusive: false, autoDelete: false);
+        
+        // Declare queue for internal domain events (CQRS synchronization)
+        _channel.QueueDeclare(queue: "notification-domain-events", durable: true, exclusive: false, autoDelete: false);
 
         _logger.LogInformation("RabbitMQ connection established");
     }
@@ -114,9 +125,9 @@ public class RabbitMqConsumer : BackgroundService
         if (userEvent == null) return;
 
         using var scope = _serviceProvider.CreateScope();
-        var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+        var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
 
-        var request = new CreateNotificationRequest(
+        var command = new CreateNotificationCommand(
             UserId: userEvent.UserId,
             Type: NotificationType.InApp,
             Title: "Welcome to PixPro!",
@@ -128,7 +139,7 @@ public class RabbitMqConsumer : BackgroundService
             }
         );
 
-        await notificationService.CreateNotificationAsync(request);
+        await mediator.Send(command);
     }
 
     private async Task HandleProjectEvent(string message)
@@ -173,11 +184,11 @@ public class RabbitMqConsumer : BackgroundService
     private async Task HandleProjectCreated(ProjectCreatedEvent projectEvent)
     {
         using var scope = _serviceProvider.CreateScope();
-        var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+        var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
 
         foreach (var userId in projectEvent.TeamMemberIds)
         {
-            var request = new CreateNotificationRequest(
+            var command = new CreateNotificationCommand(
                 UserId: userId,
                 Type: NotificationType.InApp,
                 Title: "New Project Created",
@@ -189,18 +200,18 @@ public class RabbitMqConsumer : BackgroundService
                 }
             );
 
-            await notificationService.CreateNotificationAsync(request);
+            await mediator.Send(command);
         }
     }
 
     private async Task HandleProjectUpdated(ProjectUpdatedEvent projectEvent)
     {
         using var scope = _serviceProvider.CreateScope();
-        var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+        var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
 
         foreach (var userId in projectEvent.StakeholderIds)
         {
-            var request = new CreateNotificationRequest(
+            var command = new CreateNotificationCommand(
                 UserId: userId,
                 Type: NotificationType.InApp,
                 Title: "Project Updated",
@@ -212,16 +223,16 @@ public class RabbitMqConsumer : BackgroundService
                 }
             );
 
-            await notificationService.CreateNotificationAsync(request);
+            await mediator.Send(command);
         }
     }
 
     private async Task HandleProjectAssigned(ProjectAssignedEvent projectEvent)
     {
         using var scope = _serviceProvider.CreateScope();
-        var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+        var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
 
-        var request = new CreateNotificationRequest(
+        var command = new CreateNotificationCommand(
             UserId: projectEvent.AssignedUserId,
             Type: NotificationType.InApp,
             Title: "New Project Assignment",
@@ -233,7 +244,7 @@ public class RabbitMqConsumer : BackgroundService
             }
         );
 
-        await notificationService.CreateNotificationAsync(request);
+        await mediator.Send(command);
     }
 
     private async Task HandleNotificationEvent(string message)
@@ -243,9 +254,9 @@ public class RabbitMqConsumer : BackgroundService
         if (notificationEvent == null) return;
 
         using var scope = _serviceProvider.CreateScope();
-        var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+        var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
 
-        var request = new CreateNotificationRequest(
+        var command = new CreateNotificationCommand(
             UserId: notificationEvent.UserId,
             Type: notificationEvent.Type,
             Title: notificationEvent.Title,
@@ -253,7 +264,7 @@ public class RabbitMqConsumer : BackgroundService
             Metadata: notificationEvent.Metadata
         );
 
-        await notificationService.CreateNotificationAsync(request);
+        await mediator.Send(command);
     }
 
     private async Task HandleImageProcessingEvent(string message)
@@ -266,15 +277,30 @@ public class RabbitMqConsumer : BackgroundService
             // Check if it's a completed or failed event
             if (root.TryGetProperty("ProcessedImageUrl", out _))
             {
-                var completedEvent = JsonSerializer.Deserialize<ImageProcessingCompletedEvent>(message);
-                if (completedEvent != null)
+                // Manually extract fields to avoid JsonElement deserialization issues
+                var imageId = root.GetProperty("ImageId").GetString() ?? "";
+                var userId = root.GetProperty("UserId").GetString() ?? "";
+                var imageUrl = root.GetProperty("ImageUrl").GetString() ?? "";
+                var processedImageUrl = root.GetProperty("ProcessedImageUrl").GetString() ?? "";
+                var completedAt = root.GetProperty("CompletedAt").GetDateTime();
+                
+                // Extract ProcessingResults as raw JSON (can contain arrays/objects)
+                Dictionary<string, JsonElement>? processingResults = null;
+                if (root.TryGetProperty("ProcessingResults", out var resultsElement))
                 {
-                    await HandleImageProcessingCompleted(completedEvent);
+                    processingResults = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(resultsElement.GetRawText());
                 }
-                else
-                {
-                    _logger.LogWarning("Failed to deserialize ImageProcessingCompletedEvent");
-                }
+                
+                var completedEvent = new ImageProcessingCompletedEvent(
+                    imageId, 
+                    userId, 
+                    imageUrl, 
+                    processedImageUrl, 
+                    processingResults, 
+                    completedAt
+                );
+                
+                await HandleImageProcessingCompleted(completedEvent);
             }
             else if (root.TryGetProperty("ErrorMessage", out _))
             {
@@ -304,7 +330,7 @@ public class RabbitMqConsumer : BackgroundService
         try
         {
             using var scope = _serviceProvider.CreateScope();
-            var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+            var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
             var webSocketService = scope.ServiceProvider.GetRequiredService<IWebSocketNotificationService>();
 
             var metadata = new Dictionary<string, string>
@@ -323,8 +349,8 @@ public class RabbitMqConsumer : BackgroundService
                 metadata["processingResults"] = processingResultsJson;
             }
 
-            // Create notification in database
-            var request = new CreateNotificationRequest(
+            // Create notification using CQRS Command
+            var command = new CreateNotificationCommand(
                 UserId: imageEvent.UserId,
                 Type: NotificationType.Image,
                 Title: "Image Processing Completed",
@@ -332,7 +358,7 @@ public class RabbitMqConsumer : BackgroundService
                 Metadata: metadata
             );
 
-            var notificationResult = await notificationService.CreateNotificationAsync(request);
+            var notificationResult = await mediator.Send(command);
 
             // Send real-time notification via WebSocket
             if (notificationResult.IsSuccess && notificationResult.Value != null)
@@ -363,7 +389,7 @@ public class RabbitMqConsumer : BackgroundService
         try
         {
             using var scope = _serviceProvider.CreateScope();
-            var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+            var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
             var webSocketService = scope.ServiceProvider.GetRequiredService<IWebSocketNotificationService>();
 
             var metadata = new Dictionary<string, string>
@@ -376,8 +402,8 @@ public class RabbitMqConsumer : BackgroundService
                 { "failedAt", imageEvent.FailedAt.ToString("O") }
             };
 
-            // Create notification in database
-            var request = new CreateNotificationRequest(
+            // Create notification using CQRS Command
+            var command = new CreateNotificationCommand(
                 UserId: imageEvent.UserId,
                 Type: NotificationType.Image,
                 Title: "Image Processing Failed",
@@ -385,7 +411,7 @@ public class RabbitMqConsumer : BackgroundService
                 Metadata: metadata
             );
 
-            var notificationResult = await notificationService.CreateNotificationAsync(request);
+            var notificationResult = await mediator.Send(command);
 
             // Send real-time notification via WebSocket
             if (notificationResult.IsSuccess && notificationResult.Value != null)
@@ -415,8 +441,134 @@ public class RabbitMqConsumer : BackgroundService
             _logger.LogError(ex, $"Error in HandleImageProcessingFailed for user {imageEvent.UserId}");
         }
     }
+
+    // ========================================================================
+    // CQRS Domain Event Handlers - Synchronize Write DB (MongoDB) → Read DB (Redis)
+    // ========================================================================
+
+    private async Task HandleDomainEvent(string message)
+    {
+        try
+        {
+            // Parse message to determine event type
+            using var document = JsonDocument.Parse(message);
+            var root = document.RootElement;
+
+            // Try to identify event type from message structure
+            string? eventType = null;
+            
+            if (root.TryGetProperty("notificationId", out _) && root.TryGetProperty("title", out _))
+            {
+                eventType = nameof(NotificationCreatedEvent);
+            }
+            else if (root.TryGetProperty("notificationId", out _) && root.TryGetProperty("userId", out _) && !root.TryGetProperty("title", out _))
+            {
+                eventType = nameof(NotificationReadEvent);
+            }
+            else if (root.TryGetProperty("notificationsCount", out _))
+            {
+                eventType = nameof(NotificationBatchReadEvent);
+            }
+
+            using var scope = _serviceProvider.CreateScope();
+            var readRepository = scope.ServiceProvider.GetRequiredService<INotificationReadRepository>();
+
+            switch (eventType)
+            {
+                case nameof(NotificationCreatedEvent):
+                    await HandleNotificationCreatedEvent(message, readRepository);
+                    break;
+
+                case nameof(NotificationReadEvent):
+                    await HandleNotificationReadEvent(message, readRepository);
+                    break;
+
+                case nameof(NotificationBatchReadEvent):
+                    await HandleNotificationBatchReadEvent(message, readRepository);
+                    break;
+
+                default:
+                    _logger.LogWarning("Unknown domain event type in message: {Message}", message);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error handling domain event");
+            throw;
+        }
+    }
+
+    private async Task HandleNotificationCreatedEvent(string message, INotificationReadRepository readRepository)
+    {
+        var @event = JsonSerializer.Deserialize<NotificationCreatedEvent>(message, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
+
+        if (@event == null)
+        {
+            _logger.LogError("Failed to deserialize NotificationCreatedEvent");
+            return;
+        }
+
+        var notification = new NotificationResponse(
+            Id: @event.NotificationId,
+            UserId: @event.UserId,
+            Type: @event.Type,
+            Title: @event.Title,
+            Message: @event.Message,
+            IsRead: false,
+            CreatedAt: @event.OccurredAt,
+            Metadata: @event.Metadata
+        );
+
+        await readRepository.SaveNotificationAsync(notification);
         
-    
+        _logger.LogInformation(
+            "Synced NotificationCreatedEvent to Redis read database: {NotificationId}",
+            @event.NotificationId);
+    }
+
+    private async Task HandleNotificationReadEvent(string message, INotificationReadRepository readRepository)
+    {
+        var @event = JsonSerializer.Deserialize<NotificationReadEvent>(message, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
+
+        if (@event == null)
+        {
+            _logger.LogError("Failed to deserialize NotificationReadEvent");
+            return;
+        }
+
+        await readRepository.MarkAsReadAsync(@event.NotificationId, @event.UserId);
+        
+        _logger.LogInformation(
+            "Synced NotificationReadEvent to Redis read database: {NotificationId}",
+            @event.NotificationId);
+    }
+
+    private async Task HandleNotificationBatchReadEvent(string message, INotificationReadRepository readRepository)
+    {
+        var @event = JsonSerializer.Deserialize<NotificationBatchReadEvent>(message, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
+
+        if (@event == null)
+        {
+            _logger.LogError("Failed to deserialize NotificationBatchReadEvent");
+            return;
+        }
+
+        await readRepository.MarkAllAsReadAsync(@event.UserId);
+        
+        _logger.LogInformation(
+            "Synced NotificationBatchReadEvent to Redis read database for user: {UserId}",
+            @event.UserId);
+    }
 
     public override void Dispose()
     {
