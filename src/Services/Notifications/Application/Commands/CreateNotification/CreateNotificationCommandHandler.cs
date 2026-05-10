@@ -1,7 +1,9 @@
 using MediatR;
 using PixPro.Services.Notifications.Application.Common.Results;
 using PixPro.Services.Notifications.Application.DTOs.Responses;
+using PixPro.Services.Notifications.Application.Services;
 using PixPro.Services.Notifications.Domain.Entities;
+using PixPro.Services.Notifications.Domain.Events;
 using PixPro.Services.Notifications.Domain.Repositories;
 
 namespace PixPro.Services.Notifications.Application.Commands.CreateNotification;
@@ -10,10 +12,14 @@ public class CreateNotificationCommandHandler
     : IRequestHandler<CreateNotificationCommand, Result<NotificationResponse>>
 {
     private readonly INotificationRepository _repository;
+    private readonly IEventPublisher _eventPublisher;
 
-    public CreateNotificationCommandHandler(INotificationRepository repository)
+    public CreateNotificationCommandHandler(
+        INotificationRepository repository,
+        IEventPublisher eventPublisher)
     {
         _repository = repository;
+        _eventPublisher = eventPublisher;
     }
 
     public async Task<Result<NotificationResponse>> Handle(
@@ -45,8 +51,17 @@ public class CreateNotificationCommandHandler
             // Persist to write database
             var createdNotification = await _repository.CreateAsync(notification);
 
-            // TODO: Publish NotificationCreatedEvent to message broker (US-59 AC #4)
-            // This will be implemented when we add the event publishing infrastructure
+            // Publish NotificationCreatedEvent to message broker for read DB sync
+            var domainEvent = new NotificationCreatedEvent
+            {
+                NotificationId = createdNotification.Id,
+                UserId = createdNotification.UserId,
+                Type = createdNotification.Type,
+                Title = createdNotification.Title,
+                Message = createdNotification.Message,
+                Metadata = createdNotification.Metadata
+            };
+            await _eventPublisher.PublishAsync(domainEvent, cancellationToken);
 
             // Map to response (without querying full entity again)
             var response = new NotificationResponse(
