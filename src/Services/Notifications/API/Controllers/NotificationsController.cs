@@ -1,5 +1,7 @@
+using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using PixPro.Services.Notifications.Application.Commands.CreateNotification;
 using PixPro.Services.Notifications.Application.DTOs.Requests;
 using PixPro.Services.Notifications.Application.Services;
 
@@ -10,20 +12,27 @@ namespace PixPro.Services.Notifications.API.Controllers;
 public class NotificationsController : ControllerBase
 {
     private readonly INotificationService _notificationService;
+    private readonly IMediator _mediator;
     private readonly ILogger<NotificationsController> _logger;
 
     public NotificationsController(
         INotificationService notificationService,
+        IMediator mediator,
         ILogger<NotificationsController> logger)
     {
         _notificationService = notificationService;
+        _mediator = mediator;
         _logger = logger;
     }
+
+    /// <summary>
+    /// Create notification using CQRS pattern with MediatR
+    /// </summary>
     [Authorize]
     [HttpPost]
-    public async Task<IActionResult> CreateNotification([FromBody] CreateNotificationRequest request)
+    public async Task<IActionResult> CreateNotification([FromBody] CreateNotificationCommand command)
     {
-        var result = await _notificationService.CreateNotificationAsync(request);
+        var result = await _mediator.Send(command);
 
         if (!result.IsSuccess)
         {
