@@ -41,3 +41,19 @@ public record NotificationBatchReadEvent : NotificationDomainEvent
     public string UserId { get; init; } = string.Empty;
     public int NotificationsCount { get; init; }
 }
+
+/// <summary>
+/// Event published when a notification is deleted
+/// </summary>
+public record NotificationDeletedEvent : NotificationDomainEvent
+{
+    public string NotificationId { get; init; } = string.Empty;
+    public string UserId { get; init; } = string.Empty;
+
+    public NotificationDeletedEvent(string notificationId, string userId, DateTime occurredAt)
+    {
+        NotificationId = notificationId;
+        UserId = userId;
+        OccurredAt = occurredAt;
+    }
+}

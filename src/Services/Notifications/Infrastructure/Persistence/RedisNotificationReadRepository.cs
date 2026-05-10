@@ -129,6 +129,41 @@ public class RedisNotificationReadRepository : INotificationReadRepository
         }
     }
 
+    public async Task<List<NotificationResponse>> GetUnreadByUserIdAsync(string userId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var key = $"{UserNotificationsKeyPrefix}{userId}";
+            
+            // Get all notification IDs sorted by CreatedAt
+            var notificationIds = await _database.SortedSetRangeByScoreAsync(
+                key, 
+                order: Order.Descending);
+
+            var unreadNotifications = new List<NotificationResponse>();
+            
+            foreach (var notificationId in notificationIds)
+            {
+                var notification = await GetByIdAsync(notificationId!, cancellationToken);
+                if (notification != null && !notification.IsRead)
+                {
+                    unreadNotifications.Add(notification);
+                }
+            }
+
+            _logger.LogDebug(
+                "Retrieved {Count} unread notifications for user {UserId}",
+                unreadNotifications.Count, userId);
+
+            return unreadNotifications;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving unread notifications for user {UserId}", userId);
+            throw;
+        }
+    }
+
     public async Task SaveNotificationAsync(NotificationResponse notification, CancellationToken cancellationToken = default)
     {
         try

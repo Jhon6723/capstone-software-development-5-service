@@ -461,8 +461,11 @@ public class RabbitMqConsumer : BackgroundService
             {
                 eventType = nameof(NotificationCreatedEvent);
             }
-            else if (root.TryGetProperty("notificationId", out _) && root.TryGetProperty("userId", out _) && !root.TryGetProperty("title", out _))
+            else if (root.TryGetProperty("notificationId", out _) && root.TryGetProperty("userId", out _) && !root.TryGetProperty("title", out _) && !root.TryGetProperty("notificationsCount", out _))
             {
+                // Check if it's a deleted event (has notificationId and userId but no title)
+                // We need to distinguish between ReadEvent and DeletedEvent
+                // For now, assume it's a read event unless we add more specific markers
                 eventType = nameof(NotificationReadEvent);
             }
             else if (root.TryGetProperty("notificationsCount", out _))
@@ -480,6 +483,27 @@ public class RabbitMqConsumer : BackgroundService
                     break;
 
                 case nameof(NotificationReadEvent):
+                    // Try to detect if it's actually a deleted event
+                    if (message.Contains("\"eventId\"") && message.Contains("\"notificationId\"") && message.Contains("\"userId\""))
+                    {
+                        // Could be either read or deleted - try deleted first
+                        try
+                        {
+                            var testEvent = JsonSerializer.Deserialize<NotificationDeletedEvent>(message, new JsonSerializerOptions
+                            {
+                                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                            });
+                            if (testEvent != null)
+                            {
+                                await HandleNotificationDeletedEvent(message, readRepository);
+                                break;
+                            }
+                        }
+                        catch
+                        {
+                            // It's a read event, continue
+                        }
+                    }
                     await HandleNotificationReadEvent(message, readRepository);
                     break;
 
@@ -568,6 +592,26 @@ public class RabbitMqConsumer : BackgroundService
         _logger.LogInformation(
             "Synced NotificationBatchReadEvent to Redis read database for user: {UserId}",
             @event.UserId);
+    }
+
+    private async Task HandleNotificationDeletedEvent(string message, INotificationReadRepository readRepository)
+    {
+        var @event = JsonSerializer.Deserialize<NotificationDeletedEvent>(message, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
+
+        if (@event == null)
+        {
+            _logger.LogError("Failed to deserialize NotificationDeletedEvent");
+            return;
+        }
+
+        await readRepository.DeleteAsync(@event.NotificationId, @event.UserId);
+        
+        _logger.LogInformation(
+            "Synced NotificationDeletedEvent to Redis read database: {NotificationId}",
+            @event.NotificationId);
     }
 
     public override void Dispose()

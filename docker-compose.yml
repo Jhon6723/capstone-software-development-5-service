@@ -52,10 +52,10 @@ services:
       - Jwt__Audience=${JWT_AUDIENCE}
 
   notifications:
-    image: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/notifications:latest
-    #build:
-      #context: .
-      #dockerfile: src/Services/Notifications/API/Dockerfile # Uncomment if you want to build locally instead of using the registry image
+    # image: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/notifications:latest
+    build:
+      context: .
+      dockerfile: src/Services/Notifications/API/Dockerfile # Uncomment if you want to build locally instead of using the registry image
     expose:
       - "8083"
     networks:

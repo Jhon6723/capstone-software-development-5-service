@@ -1,6 +1,6 @@
 @Gateway_HostAddress = http://localhost:8080
-@access_token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkMzhhZDQ0NC1iM2QxLTQ1OGMtYmMwOC1mOTRiYzdjODRiNzgiLCJlbWFpbCI6InRlc3QxQGV4YW1wbGUuY29tIiwianRpIjoiOTAyZWQ3ZmMtMjRlYi00YmRjLWFmM2EtZmM0OTg3OTU0NzFhIiwiaWF0IjoxNzc4Mzc4MjMyLCJleHAiOjE3NzgzODE4MzIsImlzcyI6Imh0dHBzOi8vYXBpLnBpeHByby5jb20iLCJhdWQiOiJodHRwczovL2FwaS5waXhwcm8uY29tIn0.1ZofARm353CzoGyONxLn7eHmdNlRfKN-jl2bXVne-Ro
-@userId = a6f07985-f8de-48fb-911b-6bde2504f31e
+@access_token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkMzhhZDQ0NC1iM2QxLTQ1OGMtYmMwOC1mOTRiYzdjODRiNzgiLCJlbWFpbCI6InRlc3QxQGV4YW1wbGUuY29tIiwianRpIjoiZmU5N2M4MjEtN2VlMi00MThmLWEwNWMtMDFhNTA3OTQ4OTkwIiwiaWF0IjoxNzc4Mzg0MTc1LCJleHAiOjE3NzgzODc3NzUsImlzcyI6Imh0dHBzOi8vYXBpLnBpeHByby5jb20iLCJhdWQiOiJodHRwczovL2FwaS5waXhwcm8uY29tIn0.grEVBIW3a3f3Pr1RwZFvQ9FlJSCSjFW1bkqMnkooZQo
+@userId = d38ad444-b3d1-458c-bc08-f94bc7c84b78
 # ========================================
 # Error Handling & Standardization (US-52)
 # ========================================
@@ -114,7 +114,13 @@ GET {{Gateway_HostAddress}}/api/notifications/123456
 Accept: application/json
 Authorization: Bearer {{access_token}}
 
-###
+### Get unread notifications for user
+GET {{Gateway_HostAddress}}/api/notifications/user/{{userId}}/unread
+Authorization: Bearer {{access_token}}
+
+### delete notification
+DELETE {{Gateway_HostAddress}}/api/notifications/9c6f8521-4e57-4e04-9eed-3bb9807f5c6d
+Authorization: Bearer {{access_token}}
 
 # ========================================
 # US-44: Projects Service Routes via Gateway

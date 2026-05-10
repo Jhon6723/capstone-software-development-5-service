@@ -28,6 +28,11 @@ public interface INotificationReadRepository
     Task<int> GetUnreadCountAsync(string userId, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Get all unread notifications for a user from read database
+    /// </summary>
+    Task<List<NotificationResponse>> GetUnreadByUserIdAsync(string userId, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Store/update notification in read database (called by event handlers)
     /// </summary>
     Task SaveNotificationAsync(NotificationResponse notification, CancellationToken cancellationToken = default);
