@@ -1,18 +1,18 @@
 using MediatR;
 using PixPro.Services.Notifications.Application.Common.Results;
 using PixPro.Services.Notifications.Application.DTOs.Responses;
-using PixPro.Services.Notifications.Domain.Repositories;
+using PixPro.Services.Notifications.Application.Services;
 
 namespace PixPro.Services.Notifications.Application.Queries.GetNotificationById;
 
 public class GetNotificationByIdQueryHandler 
     : IRequestHandler<GetNotificationByIdQuery, Result<NotificationResponse>>
 {
-    private readonly INotificationRepository _repository;
+    private readonly INotificationReadRepository _readRepository;
 
-    public GetNotificationByIdQueryHandler(INotificationRepository repository)
+    public GetNotificationByIdQueryHandler(INotificationReadRepository readRepository)
     {
-        _repository = repository;
+        _readRepository = readRepository;
     }
 
     public async Task<Result<NotificationResponse>> Handle(
@@ -25,27 +25,14 @@ public class GetNotificationByIdQueryHandler
             if (string.IsNullOrWhiteSpace(query.NotificationId))
                 return Result<NotificationResponse>.Failure("NotificationId is required");
 
-            // TODO: Read from read database (Redis or MongoDB read replica) - US-65
-            // For now, reading from write database (MongoDB)
-            var notification = await _repository.GetByIdAsync(query.NotificationId);
+            // Read from read database (Redis)
+            var notification = await _readRepository.GetByIdAsync(query.NotificationId, cancellationToken);
 
             // Returns 404 if not found (US-64 AC #3)
             if (notification == null)
                 return Result<NotificationResponse>.Failure("Notification not found");
 
-            // Map to response DTO
-            var response = new NotificationResponse(
-                Id: notification.Id,
-                UserId: notification.UserId,
-                Type: notification.Type,
-                Title: notification.Title,
-                Message: notification.Message,
-                IsRead: notification.IsRead,
-                CreatedAt: notification.CreatedAt,
-                Metadata: notification.Metadata
-            );
-
-            return Result<NotificationResponse>.Success(response);
+            return Result<NotificationResponse>.Success(notification);
         }
         catch (Exception ex)
         {

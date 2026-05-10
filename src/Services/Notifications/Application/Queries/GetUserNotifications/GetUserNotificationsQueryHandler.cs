@@ -1,18 +1,18 @@
 using MediatR;
 using PixPro.Services.Notifications.Application.Common.Results;
 using PixPro.Services.Notifications.Application.DTOs.Responses;
-using PixPro.Services.Notifications.Domain.Repositories;
+using PixPro.Services.Notifications.Application.Services;
 
 namespace PixPro.Services.Notifications.Application.Queries.GetUserNotifications;
 
 public class GetUserNotificationsQueryHandler 
     : IRequestHandler<GetUserNotificationsQuery, Result<NotificationListResponse>>
 {
-    private readonly INotificationRepository _repository;
+    private readonly INotificationReadRepository _readRepository;
 
-    public GetUserNotificationsQueryHandler(INotificationRepository repository)
+    public GetUserNotificationsQueryHandler(INotificationReadRepository readRepository)
     {
-        _repository = repository;
+        _readRepository = readRepository;
     }
 
     public async Task<Result<NotificationListResponse>> Handle(
@@ -31,39 +31,17 @@ public class GetUserNotificationsQueryHandler
             if (query.Page <= 0)
                 return Result<NotificationListResponse>.Failure("Page must be greater than 0");
 
-            // TODO: Read from dedicated read database (Redis or MongoDB read replica) - US-65
-            // For now, reading from write database (MongoDB)
-            // This will be optimized when we implement US-65 (Separate Read Database)
-            var notifications = await _repository.GetByUserIdAsync(
+            // Read from dedicated read database (Redis)
+            // Optimized for query patterns with pagination support
+            var response = await _readRepository.GetUserNotificationsAsync(
                 query.UserId, 
                 query.PageSize, 
-                query.Page
+                query.Page,
+                cancellationToken
             );
 
             // TODO: Use cached results when available - US-66
             // Caching layer will be implemented in US-66 (Implement Caching Layer)
-
-            // Map to response DTOs
-            var responses = notifications.Select(n => new NotificationResponse(
-                Id: n.Id,
-                UserId: n.UserId,
-                Type: n.Type,
-                Title: n.Title,
-                Message: n.Message,
-                IsRead: n.IsRead,
-                CreatedAt: n.CreatedAt,
-                Metadata: n.Metadata
-            )).ToList();
-
-            // Get total count for pagination
-            var totalCount = await _repository.GetUnreadCountAsync(query.UserId);
-
-            var response = new NotificationListResponse(
-                responses,
-                totalCount,
-                query.Page,
-                query.PageSize
-            );
 
             return Result<NotificationListResponse>.Success(response);
         }

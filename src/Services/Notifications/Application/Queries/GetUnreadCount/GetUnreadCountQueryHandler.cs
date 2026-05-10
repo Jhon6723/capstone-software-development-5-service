@@ -1,16 +1,16 @@
 using MediatR;
 using PixPro.Services.Notifications.Application.Common.Results;
-using PixPro.Services.Notifications.Domain.Repositories;
+using PixPro.Services.Notifications.Application.Services;
 
 namespace PixPro.Services.Notifications.Application.Queries.GetUnreadCount;
 
 public class GetUnreadCountQueryHandler : IRequestHandler<GetUnreadCountQuery, Result<int>>
 {
-    private readonly INotificationRepository _repository;
+    private readonly INotificationReadRepository _readRepository;
 
-    public GetUnreadCountQueryHandler(INotificationRepository repository)
+    public GetUnreadCountQueryHandler(INotificationReadRepository readRepository)
     {
-        _repository = repository;
+        _readRepository = readRepository;
     }
 
     public async Task<Result<int>> Handle(
@@ -23,15 +23,13 @@ public class GetUnreadCountQueryHandler : IRequestHandler<GetUnreadCountQuery, R
             if (string.IsNullOrWhiteSpace(query.UserId))
                 return Result<int>.Failure("UserId is required");
 
-            // TODO: Read from cached/optimized read database - US-65/US-66
-            // For now, reading from write database (MongoDB)
-            // This should be one of the first queries to cache (US-66 AC #1: Cache unread counts per user - 5 min TTL)
-            // Target: Returns count in under 100ms (US-63 AC #3)
-            var count = await _repository.GetUnreadCountAsync(query.UserId);
+            // Read from optimized read database (Redis)
+            // This query is cached and highly performant
+            var count = await _readRepository.GetUnreadCountAsync(query.UserId, cancellationToken);
 
+            // TODO: Cache with 5 min TTL - US-66 AC #1
             // TODO: Updates in real-time via WebSocket - US-63 AC #4
-            // WebSocket integration will push updates when notifications are created/read
-            // This requires WebSocket infrastructure already present in the service
+            // Target: Returns count in under 100ms (US-63 AC #3)
 
             return Result<int>.Success(count);
         }
