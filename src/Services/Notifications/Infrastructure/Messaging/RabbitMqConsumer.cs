@@ -468,7 +468,6 @@ public class RabbitMqConsumer : BackgroundService
                 { "imageId", imageEvent.ImageId }
             };
 
-            // Create notification in database
             var command = new CreateNotificationCommand(
                 UserId: imageEvent.OwnerId,
                 Type: NotificationType.Image,
@@ -502,51 +501,6 @@ public class RabbitMqConsumer : BackgroundService
         {
             _logger.LogError(ex, $"Error in HandleImageUploaded for user {imageEvent.OwnerId}");
         }
-    }
-        
-        _logger.LogInformation(
-            "Synced NotificationCreatedEvent to Redis read database: {NotificationId}",
-            @event.NotificationId);
-    }
-
-    private async Task HandleNotificationReadEvent(string message, INotificationReadRepository readRepository)
-    {
-        var @event = JsonSerializer.Deserialize<NotificationReadEvent>(message, new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        });
-
-        if (@event == null)
-        {
-            _logger.LogError("Failed to deserialize NotificationReadEvent");
-            return;
-        }
-
-        await readRepository.MarkAsReadAsync(@event.NotificationId, @event.UserId);
-        
-        _logger.LogInformation(
-            "Synced NotificationReadEvent to Redis read database: {NotificationId}",
-            @event.NotificationId);
-    }
-
-    private async Task HandleNotificationBatchReadEvent(string message, INotificationReadRepository readRepository)
-    {
-        var @event = JsonSerializer.Deserialize<NotificationBatchReadEvent>(message, new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        });
-
-        if (@event == null)
-        {
-            _logger.LogError("Failed to deserialize NotificationBatchReadEvent");
-            return;
-        }
-
-        await readRepository.MarkAllAsReadAsync(@event.UserId);
-        
-        _logger.LogInformation(
-            "Synced NotificationBatchReadEvent to Redis read database for user: {UserId}",
-            @event.UserId);
     }
 
     // ========================================================================
