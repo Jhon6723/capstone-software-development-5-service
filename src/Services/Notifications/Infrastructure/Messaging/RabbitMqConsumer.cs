@@ -459,17 +459,17 @@ public class RabbitMqConsumer : BackgroundService
         try
         {
             using var scope = _serviceProvider.CreateScope();
-            var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+            var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
             var webSocketService = scope.ServiceProvider.GetRequiredService<IWebSocketNotificationService>();
 
-            var metadata = new Dictionary<string, object>
+            var metadata = new Dictionary<string, string>
             {
                 { "eventType", "ImageUploaded" },
                 { "imageId", imageEvent.ImageId }
             };
 
             // Create notification in database
-            var request = new CreateNotificationRequest(
+            var command = new CreateNotificationCommand(
                 UserId: imageEvent.OwnerId,
                 Type: NotificationType.Image,
                 Title: "Image Uploaded Successfully",
@@ -477,7 +477,7 @@ public class RabbitMqConsumer : BackgroundService
                 Metadata: metadata
             );
 
-            var notificationResult = await notificationService.CreateNotificationAsync(request);
+            var notificationResult = await mediator.Send(command);
 
             // Send real-time notification via WebSocket
             if (notificationResult.IsSuccess && notificationResult.Value != null)
