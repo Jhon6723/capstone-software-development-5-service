@@ -1,3 +1,8 @@
+# Pipeline optimizado:
+# - Branches de desarrollo: solo build y test (~2-3 min)
+# - Rama main: build, test, docker y deploy (~12-15 min)
+# Esto reduce el tiempo de feedback en desarrollo y solo construye imágenes cuando es necesario
+
 stages:
   - build
   - test
@@ -123,12 +128,21 @@ docker:gateway:
   image: docker:27
   services:
     - docker:27-dind
-  dependencies:
-    - build:gateway
+  variables:
+    DOCKER_BUILDKIT: 1
+    BUILDKIT_PROGRESS: plain
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  needs:
+    - job: build:gateway
+      artifacts: false
   before_script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
+    - docker pull $REGISTRY_GATEWAY:latest || true
     - docker build
+      --cache-from $REGISTRY_GATEWAY:latest
+      --build-arg BUILDKIT_INLINE_CACHE=1
       -t $REGISTRY_GATEWAY:$CI_COMMIT_SHA
       -t $REGISTRY_GATEWAY:latest
       -f src/Gateway/API/Dockerfile
@@ -141,12 +155,21 @@ docker:auth:
   image: docker:27
   services:
     - docker:27-dind
-  dependencies:
-    - build:auth
+  variables:
+    DOCKER_BUILDKIT: 1
+    BUILDKIT_PROGRESS: plain
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  needs:
+    - job: build:auth
+      artifacts: false
   before_script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
+    - docker pull $REGISTRY_AUTH:latest || true
     - docker build
+      --cache-from $REGISTRY_AUTH:latest
+      --build-arg BUILDKIT_INLINE_CACHE=1
       -t $REGISTRY_AUTH:$CI_COMMIT_SHA
       -t $REGISTRY_AUTH:latest
       -f src/Services/Auth/API/Dockerfile
@@ -159,12 +182,21 @@ docker:projects:
   image: docker:27
   services:
     - docker:27-dind
-  dependencies:
-    - build:projects
+  variables:
+    DOCKER_BUILDKIT: 1
+    BUILDKIT_PROGRESS: plain
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  needs:
+    - job: build:projects
+      artifacts: false
   before_script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
+    - docker pull $REGISTRY_PROJECTS:latest || true
     - docker build
+      --cache-from $REGISTRY_PROJECTS:latest
+      --build-arg BUILDKIT_INLINE_CACHE=1
       -t $REGISTRY_PROJECTS:$CI_COMMIT_SHA
       -t $REGISTRY_PROJECTS:latest
       -f src/Services/Projects/API/Dockerfile
@@ -177,12 +209,21 @@ docker:notifications:
   image: docker:27
   services:
     - docker:27-dind
-  dependencies:
-    - build:notifications
+  variables:
+    DOCKER_BUILDKIT: 1
+    BUILDKIT_PROGRESS: plain
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  needs:
+    - job: build:notifications
+      artifacts: false
   before_script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
+    - docker pull $REGISTRY_NOTIFICATIONS:latest || true
     - docker build
+      --cache-from $REGISTRY_NOTIFICATIONS:latest
+      --build-arg BUILDKIT_INLINE_CACHE=1
       -t $REGISTRY_NOTIFICATIONS:$CI_COMMIT_SHA
       -t $REGISTRY_NOTIFICATIONS:latest
       -f src/Services/Notifications/API/Dockerfile
