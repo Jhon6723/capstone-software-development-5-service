@@ -114,7 +114,13 @@ GET {{Gateway_HostAddress}}/api/notifications/123456
 Accept: application/json
 Authorization: Bearer {{access_token}}
 
-###
+### Get unread notifications for user
+GET {{Gateway_HostAddress}}/api/notifications/user/{{userId}}/unread
+Authorization: Bearer {{access_token}}
+
+### delete notification
+DELETE {{Gateway_HostAddress}}/api/notifications/9c6f8521-4e57-4e04-9eed-3bb9807f5c6d
+Authorization: Bearer {{access_token}}
 
 # ========================================
 # US-44: Projects Service Routes via Gateway

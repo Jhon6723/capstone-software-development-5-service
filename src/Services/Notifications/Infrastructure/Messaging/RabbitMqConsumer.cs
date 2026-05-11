@@ -274,7 +274,7 @@ public class RabbitMqConsumer : BackgroundService
             using var document = JsonDocument.Parse(message);
             var root = document.RootElement;
 
-            // Check if it's a completed or failed event
+            // Check if it's a completed, failed, or uploaded event
             if (root.TryGetProperty("ProcessedImageUrl", out _))
             {
                 // Manually extract fields to avoid JsonElement deserialization issues
@@ -312,6 +312,18 @@ public class RabbitMqConsumer : BackgroundService
                 else
                 {
                     _logger.LogWarning("Failed to deserialize ImageProcessingFailedEvent");
+                }
+            }
+            else if (root.TryGetProperty("OwnerId", out _))
+            {
+                var uploadedEvent = JsonSerializer.Deserialize<ImageUploadedEvent>(message);
+                if (uploadedEvent != null)
+                {
+                    await HandleImageUploaded(uploadedEvent);
+                }
+                else
+                {
+                    _logger.LogWarning("Failed to deserialize ImageUploadedEvent");
                 }
             }
             else
@@ -442,6 +454,101 @@ public class RabbitMqConsumer : BackgroundService
         }
     }
 
+    private async Task HandleImageUploaded(ImageUploadedEvent imageEvent)
+    {
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+            var webSocketService = scope.ServiceProvider.GetRequiredService<IWebSocketNotificationService>();
+
+            var metadata = new Dictionary<string, string>
+            {
+                { "eventType", "ImageUploaded" },
+                { "imageId", imageEvent.ImageId }
+            };
+
+            // Create notification in database
+            var command = new CreateNotificationCommand(
+                UserId: imageEvent.OwnerId,
+                Type: NotificationType.Image,
+                Title: "Image Uploaded Successfully",
+                Message: "Your image has been uploaded and is ready to use!",
+                Metadata: metadata
+            );
+
+            var notificationResult = await mediator.Send(command);
+
+            // Send real-time notification via WebSocket
+            if (notificationResult.IsSuccess && notificationResult.Value != null)
+            {
+                var wsNotification = new
+                {
+                    type = "IMAGE_UPLOADED",
+                    notification = notificationResult.Value,
+                    imageId = imageEvent.ImageId,
+                    timestamp = DateTime.UtcNow
+                };
+
+                await webSocketService.SendNotificationAsync(imageEvent.OwnerId, wsNotification);
+                _logger.LogInformation($"Image uploaded notification sent to user {imageEvent.OwnerId}");
+            }
+            else
+            {
+                _logger.LogError($"Failed to create notification. Error: {notificationResult.Error}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error in HandleImageUploaded for user {imageEvent.OwnerId}");
+        }
+    }
+        
+        _logger.LogInformation(
+            "Synced NotificationCreatedEvent to Redis read database: {NotificationId}",
+            @event.NotificationId);
+    }
+
+    private async Task HandleNotificationReadEvent(string message, INotificationReadRepository readRepository)
+    {
+        var @event = JsonSerializer.Deserialize<NotificationReadEvent>(message, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
+
+        if (@event == null)
+        {
+            _logger.LogError("Failed to deserialize NotificationReadEvent");
+            return;
+        }
+
+        await readRepository.MarkAsReadAsync(@event.NotificationId, @event.UserId);
+        
+        _logger.LogInformation(
+            "Synced NotificationReadEvent to Redis read database: {NotificationId}",
+            @event.NotificationId);
+    }
+
+    private async Task HandleNotificationBatchReadEvent(string message, INotificationReadRepository readRepository)
+    {
+        var @event = JsonSerializer.Deserialize<NotificationBatchReadEvent>(message, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
+
+        if (@event == null)
+        {
+            _logger.LogError("Failed to deserialize NotificationBatchReadEvent");
+            return;
+        }
+
+        await readRepository.MarkAllAsReadAsync(@event.UserId);
+        
+        _logger.LogInformation(
+            "Synced NotificationBatchReadEvent to Redis read database for user: {UserId}",
+            @event.UserId);
+    }
+
     // ========================================================================
     // CQRS Domain Event Handlers - Synchronize Write DB (MongoDB) → Read DB (Redis)
     // ========================================================================
@@ -461,8 +568,11 @@ public class RabbitMqConsumer : BackgroundService
             {
                 eventType = nameof(NotificationCreatedEvent);
             }
-            else if (root.TryGetProperty("notificationId", out _) && root.TryGetProperty("userId", out _) && !root.TryGetProperty("title", out _))
+            else if (root.TryGetProperty("notificationId", out _) && root.TryGetProperty("userId", out _) && !root.TryGetProperty("title", out _) && !root.TryGetProperty("notificationsCount", out _))
             {
+                // Check if it's a deleted event (has notificationId and userId but no title)
+                // We need to distinguish between ReadEvent and DeletedEvent
+                // For now, assume it's a read event unless we add more specific markers
                 eventType = nameof(NotificationReadEvent);
             }
             else if (root.TryGetProperty("notificationsCount", out _))
@@ -480,6 +590,27 @@ public class RabbitMqConsumer : BackgroundService
                     break;
 
                 case nameof(NotificationReadEvent):
+                    // Try to detect if it's actually a deleted event
+                    if (message.Contains("\"eventId\"") && message.Contains("\"notificationId\"") && message.Contains("\"userId\""))
+                    {
+                        // Could be either read or deleted - try deleted first
+                        try
+                        {
+                            var testEvent = JsonSerializer.Deserialize<NotificationDeletedEvent>(message, new JsonSerializerOptions
+                            {
+                                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                            });
+                            if (testEvent != null)
+                            {
+                                await HandleNotificationDeletedEvent(message, readRepository);
+                                break;
+                            }
+                        }
+                        catch
+                        {
+                            // It's a read event, continue
+                        }
+                    }
                     await HandleNotificationReadEvent(message, readRepository);
                     break;
 
@@ -568,6 +699,26 @@ public class RabbitMqConsumer : BackgroundService
         _logger.LogInformation(
             "Synced NotificationBatchReadEvent to Redis read database for user: {UserId}",
             @event.UserId);
+    }
+
+    private async Task HandleNotificationDeletedEvent(string message, INotificationReadRepository readRepository)
+    {
+        var @event = JsonSerializer.Deserialize<NotificationDeletedEvent>(message, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
+
+        if (@event == null)
+        {
+            _logger.LogError("Failed to deserialize NotificationDeletedEvent");
+            return;
+        }
+
+        await readRepository.DeleteAsync(@event.NotificationId, @event.UserId);
+        
+        _logger.LogInformation(
+            "Synced NotificationDeletedEvent to Redis read database: {NotificationId}",
+            @event.NotificationId);
     }
 
     public override void Dispose()
