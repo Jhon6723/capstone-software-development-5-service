@@ -1,4 +1,4 @@
-@Gateway_HostAddress = http://localhost:5000
+@Gateway_HostAddress = http://localhost:8080
 @access_token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhNmYwNzk4NS1mOGRlLTQ4ZmItOTExYi02YmRlMjUwNGYzMWUiLCJlbWFpbCI6InRlc3RAZXhhbXBsZS5jb20iLCJqdGkiOiI3NzBjODA4My1kOTZjLTQ0ODYtOTAwMi1jNGJhYWI3ZTk1NTciLCJpYXQiOjE3NzgxMDUyNTMsImV4cCI6MTc3ODEwODg1MywiaXNzIjoiaHR0cHM6Ly9hcGkucGl4cHJvLmNvbSIsImF1ZCI6Imh0dHBzOi8vYXBpLnBpeHByby5jb20ifQ.dixQhLmdeCWs-8b2tXxCktbTEbMpoL9Ka55XerrGxlk
 @userId = a6f07985-f8de-48fb-911b-6bde2504f31e
 # ========================================
