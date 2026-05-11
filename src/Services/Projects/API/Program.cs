@@ -4,6 +4,8 @@ using PixPro.Services.Projects.Application;
 using PixPro.Services.Projects.Domain.Repositories;
 using PixPro.Services.Projects.Infrastructure.Persistence;
 using PixPro.Services.Projects.Infrastructure.Persistence.Repositories;
+using PixPro.Services.Projects.Application.Services;
+using PixPro.Services.Projects.Infrastructure.Cloudinary;
 
 // Load .env file if it exists (for local development without Docker)
 var envPath = Path.Combine(Directory.GetCurrentDirectory(), "../../../../.env");
@@ -23,6 +25,10 @@ builder.Services.AddDbContext<ProjectsDbContext>(options =>
 
 builder.Services.AddScoped<IProjectRepository, ProjectRepository>();
 builder.Services.AddScoped<IImageRepository, ImageRepository>();
+builder.Services.Configure<CloudinaryOptions>(
+    builder.Configuration.GetSection(CloudinaryOptions.SectionName));
+
+builder.Services.AddScoped<IStorageService, CloudinaryStorageService>();
 builder.Services.AddApplicationServices();
 
 // Configure JWT Authentication

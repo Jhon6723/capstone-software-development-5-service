@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using PixPro.Services.Projects.Application.Common.Results;
 using PixPro.Services.Projects.Application.DTOs.Requests;
@@ -11,7 +10,7 @@ namespace PixPro.Services.Projects.Application.Services;
 public class ImageService : IImageService
 {
     private readonly IImageRepository _imageRepository;
-    private readonly IConfiguration _configuration;
+    private readonly IStorageService _storageService;
     private readonly ILogger<ImageService> _logger;
 
     private static readonly HashSet<string> AllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -28,11 +27,11 @@ public class ImageService : IImageService
 
     public ImageService(
         IImageRepository imageRepository,
-        IConfiguration configuration,
+        IStorageService storageService,
         ILogger<ImageService> logger)
     {
         _imageRepository = imageRepository;
-        _configuration = configuration;
+        _storageService = storageService;
         _logger = logger;
     }
 
@@ -59,25 +58,41 @@ public class ImageService : IImageService
                 return Result<ImageUploadResponse>.Failure(
                     $"Content-Type '{file.ContentType}' is not allowed.");
 
-            var basePath = _configuration["Storage:LocalPath"] ?? "uploads/images";
-            Directory.CreateDirectory(basePath);
+            using var stream = file.OpenReadStream();
 
-            var uniqueFileName = $"{Guid.NewGuid()}{extension}";
-            var fullPath = Path.Combine(basePath, uniqueFileName);
+            var uploaded = await _storageService.UploadAsync(
+                stream,
+                file.FileName,
+                file.ContentType,
+                cancellationToken);
 
-            using (var stream = new FileStream(fullPath, FileMode.Create))
-            {
-                await file.CopyToAsync(stream, cancellationToken);
-            }
-
-            var image = new Image(file.FileName, file.ContentType, fullPath, request.OwnerId);
+            var image = Image.CreateFromCloudinary(
+                file.FileName,
+                file.ContentType,
+                uploaded.PublicId,
+                uploaded.Url,
+                uploaded.SecureUrl,
+                uploaded.Format,
+                uploaded.Bytes,
+                uploaded.Width,
+                uploaded.Height,
+                request.OwnerId);
 
             await _imageRepository.AddAsync(image, cancellationToken);
             await _imageRepository.SaveChangesAsync(cancellationToken);
 
-            _logger.LogInformation("Image uploaded: {ImageId} by Owner: {OwnerId}", image.Id, request.OwnerId);
+            _logger.LogInformation("Image uploaded to Cloudinary: {ImageId} by Owner: {OwnerId}", image.Id, request.OwnerId);
 
-            return Result<ImageUploadResponse>.Success(new ImageUploadResponse(image.Id));
+            return Result<ImageUploadResponse>.Success(new ImageUploadResponse(
+                image.Id,
+                image.FileName,
+                image.FilePath,
+                image.SecureUrl,
+                image.Format,
+                image.SizeInBytes,
+                image.Width,
+                image.Height,
+                image.CreatedAt));
         }
         catch (Exception ex)
         {
