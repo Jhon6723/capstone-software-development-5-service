@@ -468,7 +468,6 @@ public class RabbitMqConsumer : BackgroundService
                 { "imageId", imageEvent.ImageId }
             };
 
-            // Create notification in database
             var command = new CreateNotificationCommand(
                 UserId: imageEvent.OwnerId,
                 Type: NotificationType.Image,
@@ -503,8 +502,6 @@ public class RabbitMqConsumer : BackgroundService
             _logger.LogError(ex, $"Error in HandleImageUploaded for user {imageEvent.OwnerId}");
         }
     }
-        
-    
 
     // ========================================================================
     // CQRS Domain Event Handlers - Synchronize Write DB (MongoDB) → Read DB (Redis)
