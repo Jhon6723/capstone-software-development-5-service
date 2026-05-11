@@ -274,7 +274,7 @@ public class RabbitMqConsumer : BackgroundService
             using var document = JsonDocument.Parse(message);
             var root = document.RootElement;
 
-            // Check if it's a completed or failed event
+            // Check if it's a completed, failed, or uploaded event
             if (root.TryGetProperty("ProcessedImageUrl", out _))
             {
                 // Manually extract fields to avoid JsonElement deserialization issues
@@ -312,6 +312,18 @@ public class RabbitMqConsumer : BackgroundService
                 else
                 {
                     _logger.LogWarning("Failed to deserialize ImageProcessingFailedEvent");
+                }
+            }
+            else if (root.TryGetProperty("OwnerId", out _))
+            {
+                var uploadedEvent = JsonSerializer.Deserialize<ImageUploadedEvent>(message);
+                if (uploadedEvent != null)
+                {
+                    await HandleImageUploaded(uploadedEvent);
+                }
+                else
+                {
+                    _logger.LogWarning("Failed to deserialize ImageUploadedEvent");
                 }
             }
             else
@@ -441,6 +453,58 @@ public class RabbitMqConsumer : BackgroundService
             _logger.LogError(ex, $"Error in HandleImageProcessingFailed for user {imageEvent.UserId}");
         }
     }
+
+    private async Task HandleImageUploaded(ImageUploadedEvent imageEvent)
+    {
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var notificationService = scope.ServiceProvider.GetRequiredService<INotificationService>();
+            var webSocketService = scope.ServiceProvider.GetRequiredService<IWebSocketNotificationService>();
+
+            var metadata = new Dictionary<string, object>
+            {
+                { "eventType", "ImageUploaded" },
+                { "imageId", imageEvent.ImageId }
+            };
+
+            // Create notification in database
+            var request = new CreateNotificationRequest(
+                UserId: imageEvent.OwnerId,
+                Type: NotificationType.Image,
+                Title: "Image Uploaded Successfully",
+                Message: "Your image has been uploaded and is ready to use!",
+                Metadata: metadata
+            );
+
+            var notificationResult = await notificationService.CreateNotificationAsync(request);
+
+            // Send real-time notification via WebSocket
+            if (notificationResult.IsSuccess && notificationResult.Value != null)
+            {
+                var wsNotification = new
+                {
+                    type = "IMAGE_UPLOADED",
+                    notification = notificationResult.Value,
+                    imageId = imageEvent.ImageId,
+                    timestamp = DateTime.UtcNow
+                };
+
+                await webSocketService.SendNotificationAsync(imageEvent.OwnerId, wsNotification);
+                _logger.LogInformation($"Image uploaded notification sent to user {imageEvent.OwnerId}");
+            }
+            else
+            {
+                _logger.LogError($"Failed to create notification. Error: {notificationResult.Error}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Error in HandleImageUploaded for user {imageEvent.OwnerId}");
+        }
+    }
+        
+    
 
     // ========================================================================
     // CQRS Domain Event Handlers - Synchronize Write DB (MongoDB) → Read DB (Redis)

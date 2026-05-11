@@ -38,6 +38,11 @@ public record NotificationEvent(
     Dictionary<string, string>? Metadata = null
 );
 
+public record ImageUploadedEvent(
+    string ImageId,
+    string OwnerId
+);
+
 public record ImageProcessingCompletedEvent(
     string ImageId,
     string UserId,
