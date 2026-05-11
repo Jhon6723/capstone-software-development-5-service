@@ -2,6 +2,7 @@ using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PixPro.Services.Notifications.Application.Commands.CreateNotification;
+using PixPro.Services.Notifications.Application.Commands.MarkAsRead;
 using PixPro.Services.Notifications.Application.DTOs.Requests;
 using PixPro.Services.Notifications.Application.Services;
 
@@ -104,11 +105,15 @@ public class NotificationsController : ControllerBase
         return Ok(new { count = result.Value });
     }
 
+    /// <summary>
+    /// Mark notification as read using CQRS pattern with MediatR
+    /// </summary>
     [Authorize]
     [HttpPut("{id}/read")]
     public async Task<IActionResult> MarkAsRead(string id)
     {
-        var result = await _notificationService.MarkAsReadAsync(id);
+        var command = new MarkAsReadCommand(id);
+        var result = await _mediator.Send(command);
 
         if (!result.IsSuccess)
         {
