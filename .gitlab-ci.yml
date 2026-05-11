@@ -1,3 +1,8 @@
+# Pipeline optimizado:
+# - Branches de desarrollo: solo build y test (~2-3 min)
+# - Rama main: build, test, docker y deploy (~12-15 min)
+# Esto reduce el tiempo de feedback en desarrollo y solo construye imágenes cuando es necesario
+
 stages:
   - build
   - test
@@ -126,6 +131,8 @@ docker:gateway:
   variables:
     DOCKER_BUILDKIT: 1
     BUILDKIT_PROGRESS: plain
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
   needs:
     - job: build:gateway
       artifacts: false
@@ -151,6 +158,8 @@ docker:auth:
   variables:
     DOCKER_BUILDKIT: 1
     BUILDKIT_PROGRESS: plain
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
   needs:
     - job: build:auth
       artifacts: false
@@ -176,6 +185,8 @@ docker:projects:
   variables:
     DOCKER_BUILDKIT: 1
     BUILDKIT_PROGRESS: plain
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
   needs:
     - job: build:projects
       artifacts: false
@@ -201,6 +212,8 @@ docker:notifications:
   variables:
     DOCKER_BUILDKIT: 1
     BUILDKIT_PROGRESS: plain
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
   needs:
     - job: build:notifications
       artifacts: false
