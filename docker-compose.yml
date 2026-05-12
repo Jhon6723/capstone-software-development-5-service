@@ -36,11 +36,7 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - JWT_ISSUER=${JWT_ISSUER}
       - JWT_AUDIENCE=${JWT_AUDIENCE}
-      - ASPNETCORE_URLS=http://+:8081
-      - AUTH_DB_CONNECTION=Host=db;Port=5432;Database=pixpro_auth;Username=postgres;Password=${DB_PASSWORD}
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_ISSUER=${JWT_ISSUER}
-      - JWT_AUDIENCE=${JWT_AUDIENCE}
+
 
   projects:
     image: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/projects:latest
@@ -87,8 +83,7 @@ services:
     ports:
       - "5672:5672" # AMQP port
       - "15672:15672" # Management UI
-      - "5672:5672" # AMQP port
-      - "15672:15672" # Management UI
+
     environment:
       - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
       - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
