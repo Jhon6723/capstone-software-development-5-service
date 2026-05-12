@@ -19,7 +19,7 @@ variables:
 default:
   tags:
     - local
-    
+
 cache:
   key: ${CI_COMMIT_REF_SLUG}
   paths:
@@ -232,47 +232,3 @@ docker:notifications:
       .
     - docker push $REGISTRY_NOTIFICATIONS:$CI_COMMIT_SHA
     - docker push $REGISTRY_NOTIFICATIONS:latest
-
-deploy:swarm:
-  stage: deploy
-  image: alpine:3.19
-  before_script:
-    - apk add --no-cache openssh-client
-    - eval $(ssh-agent -s)
-    - echo "$SWARM_MANAGER_SSH_KEY" | tr -d '\r' | ssh-add -
-    - mkdir -p ~/.ssh && chmod 700 ~/.ssh
-    - ssh-keyscan $SWARM_MANAGER_IP >> ~/.ssh/known_hosts
-  script:
-    - ssh deploy@$SWARM_MANAGER_IP "
-      docker service update
-      --image $REGISTRY_GATEWAY:$CI_COMMIT_SHA
-      --update-parallelism 1
-      --update-delay 10s
-      --update-failure-action rollback
-      --update-order start-first
-      pixpro_gateway
-      &&
-      docker service update
-      --image $REGISTRY_AUTH:$CI_COMMIT_SHA
-      --update-parallelism 1
-      --update-delay 10s
-      --update-failure-action rollback
-      --update-order start-first
-      pixpro_auth
-      &&
-      docker service update
-      --image $REGISTRY_PROJECTS:$CI_COMMIT_SHA
-      --update-parallelism 1
-      --update-delay 10s
-      --update-failure-action rollback
-      --update-order start-first
-      pixpro_projects
-      &&
-      docker service update
-      --image $REGISTRY_NOTIFICATIONS:$CI_COMMIT_SHA
-      --update-parallelism 1
-      --update-delay 10s
-      --update-failure-action rollback
-      --update-order start-first
-      pixpro_notifications
-      "
