@@ -268,11 +268,14 @@ public class RabbitMqConsumer : BackgroundService
                 var imageUrl = root.GetProperty("ImageUrl").GetString() ?? "";
                 var processedImageUrl = root.GetProperty("ProcessedImageUrl").GetString() ?? "";
                 var completedAt = root.GetProperty("CompletedAt").GetDateTime();
-
-                Dictionary<string, JsonElement>? processingResults = null;
+                
+                // Extract ProcessingResults as JsonElement (can contain any JSON structure)
+                JsonElement? processingResults = null;
                 if (root.TryGetProperty("ProcessingResults", out var resultsElement))
-                    processingResults = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(resultsElement.GetRawText());
-
+                {
+                    processingResults = resultsElement;
+                }
+                
                 var completedEvent = new ImageProcessingCompletedEvent(
                     imageId,
                     userId,
@@ -357,9 +360,11 @@ public class RabbitMqConsumer : BackgroundService
                 { "completedAt", imageEvent.CompletedAt.ToString("O") }
             };
 
-            if (imageEvent.ProcessingResults != null && imageEvent.ProcessingResults.Count > 0)
+            // Serialize processing results as JSON string (supports arrays, objects, etc.)
+            if (imageEvent.ProcessingResults != null)
             {
-                metadata["processingResults"] = JsonSerializer.Serialize(imageEvent.ProcessingResults);
+                var processingResultsJson = imageEvent.ProcessingResults.Value.GetRawText();
+                metadata["processingResults"] = processingResultsJson;
             }
 
             var command = new CreateNotificationCommand(

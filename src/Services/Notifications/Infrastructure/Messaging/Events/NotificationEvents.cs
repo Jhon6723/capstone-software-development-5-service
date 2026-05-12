@@ -48,7 +48,7 @@ public record ImageProcessingCompletedEvent(
     string UserId,
     string ImageUrl,
     string ProcessedImageUrl,
-    Dictionary<string, JsonElement>? ProcessingResults,
+    JsonElement? ProcessingResults,
     DateTime CompletedAt
 );
 

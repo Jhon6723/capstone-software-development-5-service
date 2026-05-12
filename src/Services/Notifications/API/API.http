@@ -1,5 +1,6 @@
 @Notifications_HostAddress = http://localhost:8083
 @userId = user123
+@notificationId = 123e4567-e89b-12d3-a456-426614174000
 
 ### Health Check
 GET {{Notifications_HostAddress}}/api/notifications
