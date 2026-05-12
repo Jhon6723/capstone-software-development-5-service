@@ -141,6 +141,8 @@ docker:gateway:
   variables:
     DOCKER_BUILDKIT: 1
     BUILDKIT_PROGRESS: plain
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
   needs:
     - job: build:gateway
       artifacts: false
@@ -166,6 +168,8 @@ docker:auth:
   variables:
     DOCKER_BUILDKIT: 1
     BUILDKIT_PROGRESS: plain
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
   needs:
     - job: build:auth
       artifacts: false
@@ -191,6 +195,8 @@ docker:projects:
   variables:
     DOCKER_BUILDKIT: 1
     BUILDKIT_PROGRESS: plain
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
   needs:
     - job: build:projects
       artifacts: false
@@ -216,6 +222,8 @@ docker:notifications:
   variables:
     DOCKER_BUILDKIT: 1
     BUILDKIT_PROGRESS: plain
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
   needs:
     - job: build:notifications
       artifacts: false
