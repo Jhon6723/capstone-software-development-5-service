@@ -3,6 +3,8 @@ using Microsoft.Extensions.Logging;
 using PixPro.Services.Projects.Application.Common.Results;
 using PixPro.Services.Projects.Application.DTOs.Requests;
 using PixPro.Services.Projects.Application.DTOs.Responses;
+using PixPro.Services.Projects.Application.IntegrationEvents;
+using PixPro.Services.Projects.Application.Interfaces;
 using PixPro.Services.Projects.Domain.Entities;
 using PixPro.Services.Projects.Domain.Repositories;
 
@@ -13,6 +15,7 @@ public class ImageService : IImageService
     private readonly IImageRepository _imageRepository;
     private readonly IConfiguration _configuration;
     private readonly ILogger<ImageService> _logger;
+    private readonly IMessagePublisher _messagePublisher;
 
     private static readonly HashSet<string> AllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -29,11 +32,13 @@ public class ImageService : IImageService
     public ImageService(
         IImageRepository imageRepository,
         IConfiguration configuration,
-        ILogger<ImageService> logger)
+        ILogger<ImageService> logger,
+        IMessagePublisher messagePublisher)
     {
         _imageRepository = imageRepository;
         _configuration = configuration;
         _logger = logger;
+        _messagePublisher = messagePublisher;
     }
 
     public async Task<Result<ImageUploadResponse>> UploadAsync(
@@ -76,6 +81,20 @@ public class ImageService : IImageService
             await _imageRepository.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation("Image uploaded: {ImageId} by Owner: {OwnerId}", image.Id, request.OwnerId);
+
+            try
+            {
+                await _messagePublisher.PublishAsync(
+                    new ImageUploadedEvent(image.Id, request.OwnerId),
+                    "image-processing-events",
+                    cancellationToken);
+
+                _logger.LogInformation("ImageUploadedEvent published for ImageId: {ImageId}", image.Id);
+            }
+            catch (Exception pubEx)
+            {
+                _logger.LogWarning(pubEx, "failed to publish ImageUploadedEvent for ImageId: {ImageId}. Image was saved successfully", image.Id);
+            }
 
             return Result<ImageUploadResponse>.Success(new ImageUploadResponse(image.Id));
         }
