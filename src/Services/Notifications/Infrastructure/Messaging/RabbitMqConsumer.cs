@@ -38,19 +38,16 @@ public class RabbitMqConsumer : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await Task.Delay(5000, stoppingToken); // Wait for RabbitMQ to be ready
+        await Task.Delay(5000, stoppingToken);
 
         try
         {
             InitializeRabbitMq();
-            
-            // External events (inter-microservice communication)
+
             ConsumeQueue("user-events", HandleUserEvent, stoppingToken);
             ConsumeQueue("project-events", HandleProjectEvent, stoppingToken);
             ConsumeQueue("notifications", HandleNotificationEvent, stoppingToken);
             ConsumeQueue("image-processing-events", HandleImageProcessingEvent, stoppingToken);
-            
-            // Internal domain events (CQRS synchronization to Redis)
             ConsumeQueue("notification-domain-events", HandleDomainEvent, stoppingToken);
 
             _logger.LogInformation("RabbitMQ Consumer started successfully");
@@ -79,13 +76,10 @@ public class RabbitMqConsumer : BackgroundService
         _connection = factory.CreateConnection();
         _channel = _connection.CreateModel();
 
-        // Declare queues for external events (inter-microservice communication)
         _channel.QueueDeclare(queue: "user-events", durable: true, exclusive: false, autoDelete: false);
         _channel.QueueDeclare(queue: "project-events", durable: true, exclusive: false, autoDelete: false);
         _channel.QueueDeclare(queue: "image-processing-events", durable: true, exclusive: false, autoDelete: false);
         _channel.QueueDeclare(queue: "notifications", durable: true, exclusive: false, autoDelete: false);
-        
-        // Declare queue for internal domain events (CQRS synchronization)
         _channel.QueueDeclare(queue: "notification-domain-events", durable: true, exclusive: false, autoDelete: false);
 
         _logger.LogInformation("RabbitMQ connection established");
@@ -94,18 +88,18 @@ public class RabbitMqConsumer : BackgroundService
     private void ConsumeQueue(string queueName, Func<string, Task> messageHandler, CancellationToken stoppingToken)
     {
         var consumer = new AsyncEventingBasicConsumer(_channel);
-        
+
         consumer.Received += async (model, ea) =>
         {
             try
             {
                 var body = ea.Body.ToArray();
                 var message = Encoding.UTF8.GetString(body);
-                
+
                 _logger.LogInformation($"Received message from {queueName}: {message}");
-                
+
                 await messageHandler(message);
-                
+
                 _channel?.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
             }
             catch (Exception ex)
@@ -121,7 +115,7 @@ public class RabbitMqConsumer : BackgroundService
     private async Task HandleUserEvent(string message)
     {
         var userEvent = JsonSerializer.Deserialize<UserRegisteredEvent>(message);
-        
+
         if (userEvent == null) return;
 
         using var scope = _serviceProvider.CreateScope();
@@ -146,7 +140,6 @@ public class RabbitMqConsumer : BackgroundService
     {
         try
         {
-            // Try to deserialize as different project event types
             using var document = JsonDocument.Parse(message);
             var root = document.RootElement;
 
@@ -154,25 +147,19 @@ public class RabbitMqConsumer : BackgroundService
             {
                 var projectEvent = JsonSerializer.Deserialize<ProjectCreatedEvent>(message);
                 if (projectEvent != null)
-                {
                     await HandleProjectCreated(projectEvent);
-                }
             }
             else if (root.TryGetProperty("UpdatedBy", out _))
             {
                 var projectEvent = JsonSerializer.Deserialize<ProjectUpdatedEvent>(message);
                 if (projectEvent != null)
-                {
                     await HandleProjectUpdated(projectEvent);
-                }
             }
             else if (root.TryGetProperty("AssignedUserId", out _))
             {
                 var projectEvent = JsonSerializer.Deserialize<ProjectAssignedEvent>(message);
                 if (projectEvent != null)
-                {
                     await HandleProjectAssigned(projectEvent);
-                }
             }
         }
         catch (Exception ex)
@@ -250,7 +237,7 @@ public class RabbitMqConsumer : BackgroundService
     private async Task HandleNotificationEvent(string message)
     {
         var notificationEvent = JsonSerializer.Deserialize<NotificationEvent>(message);
-        
+
         if (notificationEvent == null) return;
 
         using var scope = _serviceProvider.CreateScope();
@@ -274,57 +261,44 @@ public class RabbitMqConsumer : BackgroundService
             using var document = JsonDocument.Parse(message);
             var root = document.RootElement;
 
-            // Check if it's a completed, failed, or uploaded event
             if (root.TryGetProperty("ProcessedImageUrl", out _))
             {
-                // Manually extract fields to avoid JsonElement deserialization issues
                 var imageId = root.GetProperty("ImageId").GetString() ?? "";
                 var userId = root.GetProperty("UserId").GetString() ?? "";
                 var imageUrl = root.GetProperty("ImageUrl").GetString() ?? "";
                 var processedImageUrl = root.GetProperty("ProcessedImageUrl").GetString() ?? "";
                 var completedAt = root.GetProperty("CompletedAt").GetDateTime();
-                
-                // Extract ProcessingResults as raw JSON (can contain arrays/objects)
+
                 Dictionary<string, JsonElement>? processingResults = null;
                 if (root.TryGetProperty("ProcessingResults", out var resultsElement))
-                {
                     processingResults = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(resultsElement.GetRawText());
-                }
-                
+
                 var completedEvent = new ImageProcessingCompletedEvent(
-                    imageId, 
-                    userId, 
-                    imageUrl, 
-                    processedImageUrl, 
-                    processingResults, 
+                    imageId,
+                    userId,
+                    imageUrl,
+                    processedImageUrl,
+                    processingResults,
                     completedAt
                 );
-                
+
                 await HandleImageProcessingCompleted(completedEvent);
             }
             else if (root.TryGetProperty("ErrorMessage", out _))
             {
                 var failedEvent = JsonSerializer.Deserialize<ImageProcessingFailedEvent>(message);
                 if (failedEvent != null)
-                {
                     await HandleImageProcessingFailed(failedEvent);
-                }
                 else
-                {
                     _logger.LogWarning("Failed to deserialize ImageProcessingFailedEvent");
-                }
             }
             else if (root.TryGetProperty("OwnerId", out _))
             {
                 var uploadedEvent = JsonSerializer.Deserialize<ImageUploadedEvent>(message);
                 if (uploadedEvent != null)
-                {
                     await HandleImageUploaded(uploadedEvent);
-                }
                 else
-                {
                     _logger.LogWarning("Failed to deserialize ImageUploadedEvent");
-                }
             }
             else
             {
@@ -334,6 +308,35 @@ public class RabbitMqConsumer : BackgroundService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error handling image processing event");
+        }
+    }
+
+    private async Task HandleImageUploaded(ImageUploadedEvent imageEvent)
+    {
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
+
+            var command = new CreateNotificationCommand(
+                UserId: imageEvent.OwnerId,
+                Type: NotificationType.Image,
+                Title: "Image Uploaded",
+                Message: "Your image has been uploaded successfully and is ready for processing.",
+                Metadata: new Dictionary<string, string>
+                {
+                    { "eventType", "ImageUploaded" },
+                    { "imageId", imageEvent.ImageId }
+                }
+            );
+
+            await mediator.Send(command);
+
+            _logger.LogInformation("ImageUploaded notification sent for ImageId: {ImageId}", imageEvent.ImageId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in HandleImageUploaded for ImageId: {ImageId}", imageEvent.ImageId);
         }
     }
 
@@ -354,14 +357,11 @@ public class RabbitMqConsumer : BackgroundService
                 { "completedAt", imageEvent.CompletedAt.ToString("O") }
             };
 
-            // Serialize processing results as JSON string to avoid JsonElement serialization issues
             if (imageEvent.ProcessingResults != null && imageEvent.ProcessingResults.Count > 0)
             {
-                var processingResultsJson = JsonSerializer.Serialize(imageEvent.ProcessingResults);
-                metadata["processingResults"] = processingResultsJson;
+                metadata["processingResults"] = JsonSerializer.Serialize(imageEvent.ProcessingResults);
             }
 
-            // Create notification using CQRS Command
             var command = new CreateNotificationCommand(
                 UserId: imageEvent.UserId,
                 Type: NotificationType.Image,
@@ -372,7 +372,6 @@ public class RabbitMqConsumer : BackgroundService
 
             var notificationResult = await mediator.Send(command);
 
-            // Send real-time notification via WebSocket
             if (notificationResult.IsSuccess && notificationResult.Value != null)
             {
                 var wsNotification = new
@@ -414,7 +413,6 @@ public class RabbitMqConsumer : BackgroundService
                 { "failedAt", imageEvent.FailedAt.ToString("O") }
             };
 
-            // Create notification using CQRS Command
             var command = new CreateNotificationCommand(
                 UserId: imageEvent.UserId,
                 Type: NotificationType.Image,
@@ -425,7 +423,6 @@ public class RabbitMqConsumer : BackgroundService
 
             var notificationResult = await mediator.Send(command);
 
-            // Send real-time notification via WebSocket
             if (notificationResult.IsSuccess && notificationResult.Value != null)
             {
                 var wsNotification = new
@@ -454,79 +451,21 @@ public class RabbitMqConsumer : BackgroundService
         }
     }
 
-    private async Task HandleImageUploaded(ImageUploadedEvent imageEvent)
-    {
-        try
-        {
-            using var scope = _serviceProvider.CreateScope();
-            var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
-            var webSocketService = scope.ServiceProvider.GetRequiredService<IWebSocketNotificationService>();
-
-            var metadata = new Dictionary<string, string>
-            {
-                { "eventType", "ImageUploaded" },
-                { "imageId", imageEvent.ImageId }
-            };
-
-            var command = new CreateNotificationCommand(
-                UserId: imageEvent.OwnerId,
-                Type: NotificationType.Image,
-                Title: "Image Uploaded Successfully",
-                Message: "Your image has been uploaded and is ready to use!",
-                Metadata: metadata
-            );
-
-            var notificationResult = await mediator.Send(command);
-
-            // Send real-time notification via WebSocket
-            if (notificationResult.IsSuccess && notificationResult.Value != null)
-            {
-                var wsNotification = new
-                {
-                    type = "IMAGE_UPLOADED",
-                    notification = notificationResult.Value,
-                    imageId = imageEvent.ImageId,
-                    timestamp = DateTime.UtcNow
-                };
-
-                await webSocketService.SendNotificationAsync(imageEvent.OwnerId, wsNotification);
-                _logger.LogInformation($"Image uploaded notification sent to user {imageEvent.OwnerId}");
-            }
-            else
-            {
-                _logger.LogError($"Failed to create notification. Error: {notificationResult.Error}");
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, $"Error in HandleImageUploaded for user {imageEvent.OwnerId}");
-        }
-    }
-
-    // ========================================================================
-    // CQRS Domain Event Handlers - Synchronize Write DB (MongoDB) → Read DB (Redis)
-    // ========================================================================
-
     private async Task HandleDomainEvent(string message)
     {
         try
         {
-            // Parse message to determine event type
             using var document = JsonDocument.Parse(message);
             var root = document.RootElement;
 
-            // Try to identify event type from message structure
             string? eventType = null;
-            
+
             if (root.TryGetProperty("notificationId", out _) && root.TryGetProperty("title", out _))
             {
                 eventType = nameof(NotificationCreatedEvent);
             }
             else if (root.TryGetProperty("notificationId", out _) && root.TryGetProperty("userId", out _) && !root.TryGetProperty("title", out _) && !root.TryGetProperty("notificationsCount", out _))
             {
-                // Check if it's a deleted event (has notificationId and userId but no title)
-                // We need to distinguish between ReadEvent and DeletedEvent
-                // For now, assume it's a read event unless we add more specific markers
                 eventType = nameof(NotificationReadEvent);
             }
             else if (root.TryGetProperty("notificationsCount", out _))
@@ -544,10 +483,8 @@ public class RabbitMqConsumer : BackgroundService
                     break;
 
                 case nameof(NotificationReadEvent):
-                    // Try to detect if it's actually a deleted event
                     if (message.Contains("\"eventId\"") && message.Contains("\"notificationId\"") && message.Contains("\"userId\""))
                     {
-                        // Could be either read or deleted - try deleted first
                         try
                         {
                             var testEvent = JsonSerializer.Deserialize<NotificationDeletedEvent>(message, new JsonSerializerOptions
@@ -562,7 +499,6 @@ public class RabbitMqConsumer : BackgroundService
                         }
                         catch
                         {
-                            // It's a read event, continue
                         }
                     }
                     await HandleNotificationReadEvent(message, readRepository);
@@ -609,7 +545,7 @@ public class RabbitMqConsumer : BackgroundService
         );
 
         await readRepository.SaveNotificationAsync(notification);
-        
+
         _logger.LogInformation(
             "Synced NotificationCreatedEvent to Redis read database: {NotificationId}",
             @event.NotificationId);
@@ -629,7 +565,7 @@ public class RabbitMqConsumer : BackgroundService
         }
 
         await readRepository.MarkAsReadAsync(@event.NotificationId, @event.UserId);
-        
+
         _logger.LogInformation(
             "Synced NotificationReadEvent to Redis read database: {NotificationId}",
             @event.NotificationId);
@@ -649,7 +585,7 @@ public class RabbitMqConsumer : BackgroundService
         }
 
         await readRepository.MarkAllAsReadAsync(@event.UserId);
-        
+
         _logger.LogInformation(
             "Synced NotificationBatchReadEvent to Redis read database for user: {UserId}",
             @event.UserId);
@@ -669,7 +605,7 @@ public class RabbitMqConsumer : BackgroundService
         }
 
         await readRepository.DeleteAsync(@event.NotificationId, @event.UserId);
-        
+
         _logger.LogInformation(
             "Synced NotificationDeletedEvent to Redis read database: {NotificationId}",
             @event.NotificationId);

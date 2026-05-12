@@ -214,12 +214,12 @@ FakesAssemblies/
 
 # Environment variables and secrets
 .env
-.env.local
-.env.*.local
 
 # Local configuration files with sensitive data
-appsettings.*.local.json
-**/appsettings.*.local.json
 scripts/
 
+# Uploaded files (e.g., user profile pictures, documents, etc.)
 uploads/
+
+# Database migration files
+Migrations/
