@@ -47,9 +47,15 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:8082
       - ConnectionStrings__ProjectsDb=Host=projects-db;Port=5432;Database=pixpro_projects;Username=postgres;Password=${PROJECTS_DB_PASSWORD}
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__Username=${RABBITMQ_USER}
+      - RabbitMQ__Password=${RABBITMQ_PASSWORD}
       - Jwt__Secret=${JWT_SECRET}
       - Jwt__Issuer=${JWT_ISSUER}
       - Jwt__Audience=${JWT_AUDIENCE}
+    depends_on:
+      - rabbitmq
+      - projects-db
 
   notifications:
     image: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/notifications:latest
