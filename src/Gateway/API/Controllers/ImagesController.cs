@@ -21,13 +21,13 @@ public class ImagesController : ControllerBase
     /// The image will be processed asynchronously.
     /// Requires valid JWT token.
     /// </remarks>
-    [HttpPost]
+    [HttpPost("upload")]
     [Consumes("multipart/form-data")]
     [ProducesResponseType(typeof(ImageResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [RequestSizeLimit(10485760)] // 10 MB
-    public IActionResult UploadImage([FromForm] IFormFile file)
+    public IActionResult UploadImage([FromForm] UploadImageRequest request)
     {
         throw new NotImplementedException("This endpoint is proxied by YARP");
     }

@@ -60,6 +60,15 @@ services:
       - Jwt__Secret=${JWT_SECRET}
       - Jwt__Issuer=${JWT_ISSUER}
       - Jwt__Audience=${JWT_AUDIENCE}
+      - Cloudinary__CloudName=${CLOUDINARY_CLOUD_NAME}
+      - Cloudinary__ApiKey=${CLOUDINARY_API_KEY}
+      - Cloudinary__ApiSecret=${CLOUDINARY_API_SECRET}
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__Username=${RABBITMQ_USER}
+      - RabbitMQ__Password=${RABBITMQ_PASSWORD}
+    depends_on:
+      - rabbitmq
+      - projects-db
 
   notifications:
     # image: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/notifications:latest

@@ -1,7 +1,20 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel;
+using Microsoft.AspNetCore.Http;
 
 namespace API.Models;
+
+/// <summary>
+/// Request model for uploading an image
+/// </summary>
+public class UploadImageRequest
+{
+    /// <summary>
+    /// Image file to upload (max 10MB)
+    /// </summary>
+    [Required]
+    public required IFormFile File { get; set; }
+}
 
 /// <summary>
 /// Image processing status

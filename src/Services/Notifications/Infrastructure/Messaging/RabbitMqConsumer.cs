@@ -554,6 +554,37 @@ public class RabbitMqConsumer : BackgroundService
         _logger.LogInformation(
             "Synced NotificationCreatedEvent to Redis read database: {NotificationId}",
             @event.NotificationId);
+
+        // Send notification to WebSocket clients
+        using var scope = _serviceProvider.CreateScope();
+        var webSocketService = scope.ServiceProvider.GetRequiredService<IWebSocketNotificationService>();
+
+        // Determine notification type based on metadata
+        string notificationType = "NOTIFICATION";
+        if (@event.Metadata != null && @event.Metadata.TryGetValue("eventType", out var eventType))
+        {
+            notificationType = eventType switch
+            {
+                "ImageUploaded" => "IMAGE_UPLOADED",
+                "ImageProcessingCompleted" => "IMAGE_PROCESSING_COMPLETED",
+                "ImageProcessingFailed" => "IMAGE_PROCESSING_FAILED",
+                _ => "NOTIFICATION"
+            };
+        }
+
+        var wsNotification = new
+        {
+            type = notificationType,
+            notification = notification,
+            timestamp = DateTime.UtcNow
+        };
+
+        await webSocketService.SendNotificationAsync(@event.UserId, wsNotification);
+
+        _logger.LogInformation(
+            "Sent notification {NotificationId} to WebSocket clients for user {UserId}",
+            @event.NotificationId,
+            @event.UserId);
     }
 
     private async Task HandleNotificationReadEvent(string message, INotificationReadRepository readRepository)
