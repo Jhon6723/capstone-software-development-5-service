@@ -14,7 +14,13 @@ variables:
   REGISTRY_AUTH: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/auth
   REGISTRY_PROJECTS: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/projects
   REGISTRY_NOTIFICATIONS: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/notifications
+  NUGET_PACKAGES: "$CI_PROJECT_DIR/.nuget-cache"
 
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - .nuget-cache/
+  
 build:gateway:
   stage: build
   image: mcr.microsoft.com/dotnet/sdk:9.0
