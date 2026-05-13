@@ -1,3 +1,8 @@
+# Pipeline optimizado:
+# - Branches de desarrollo: solo build y test (~2-3 min)
+# - Rama main: build, test, docker y deploy (~12-15 min)
+# Esto reduce el tiempo de feedback en desarrollo y solo construye imágenes cuando es necesario
+
 stages:
   - build
   - test
@@ -9,7 +14,13 @@ variables:
   REGISTRY_AUTH: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/auth
   REGISTRY_PROJECTS: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/projects
   REGISTRY_NOTIFICATIONS: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/notifications
+  NUGET_PACKAGES: "$CI_PROJECT_DIR/.nuget-cache"
 
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - .nuget-cache/
+  
 build:gateway:
   stage: build
   image: mcr.microsoft.com/dotnet/sdk:9.0
@@ -123,12 +134,21 @@ docker:gateway:
   image: docker:27
   services:
     - docker:27-dind
-  dependencies:
-    - build:gateway
+  variables:
+    DOCKER_BUILDKIT: 1
+    BUILDKIT_PROGRESS: plain
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  needs:
+    - job: build:gateway
+      artifacts: false
   before_script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
+    - docker pull $REGISTRY_GATEWAY:latest || true
     - docker build
+      --cache-from $REGISTRY_GATEWAY:latest
+      --build-arg BUILDKIT_INLINE_CACHE=1
       -t $REGISTRY_GATEWAY:$CI_COMMIT_SHA
       -t $REGISTRY_GATEWAY:latest
       -f src/Gateway/API/Dockerfile
@@ -141,12 +161,21 @@ docker:auth:
   image: docker:27
   services:
     - docker:27-dind
-  dependencies:
-    - build:auth
+  variables:
+    DOCKER_BUILDKIT: 1
+    BUILDKIT_PROGRESS: plain
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  needs:
+    - job: build:auth
+      artifacts: false
   before_script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
+    - docker pull $REGISTRY_AUTH:latest || true
     - docker build
+      --cache-from $REGISTRY_AUTH:latest
+      --build-arg BUILDKIT_INLINE_CACHE=1
       -t $REGISTRY_AUTH:$CI_COMMIT_SHA
       -t $REGISTRY_AUTH:latest
       -f src/Services/Auth/API/Dockerfile
@@ -159,12 +188,21 @@ docker:projects:
   image: docker:27
   services:
     - docker:27-dind
-  dependencies:
-    - build:projects
+  variables:
+    DOCKER_BUILDKIT: 1
+    BUILDKIT_PROGRESS: plain
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  needs:
+    - job: build:projects
+      artifacts: false
   before_script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
+    - docker pull $REGISTRY_PROJECTS:latest || true
     - docker build
+      --cache-from $REGISTRY_PROJECTS:latest
+      --build-arg BUILDKIT_INLINE_CACHE=1
       -t $REGISTRY_PROJECTS:$CI_COMMIT_SHA
       -t $REGISTRY_PROJECTS:latest
       -f src/Services/Projects/API/Dockerfile
@@ -177,61 +215,24 @@ docker:notifications:
   image: docker:27
   services:
     - docker:27-dind
-  dependencies:
-    - build:notifications
+  variables:
+    DOCKER_BUILDKIT: 1
+    BUILDKIT_PROGRESS: plain
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  needs:
+    - job: build:notifications
+      artifacts: false
   before_script:
     - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
+    - docker pull $REGISTRY_NOTIFICATIONS:latest || true
     - docker build
+      --cache-from $REGISTRY_NOTIFICATIONS:latest
+      --build-arg BUILDKIT_INLINE_CACHE=1
       -t $REGISTRY_NOTIFICATIONS:$CI_COMMIT_SHA
       -t $REGISTRY_NOTIFICATIONS:latest
       -f src/Services/Notifications/API/Dockerfile
       .
     - docker push $REGISTRY_NOTIFICATIONS:$CI_COMMIT_SHA
     - docker push $REGISTRY_NOTIFICATIONS:latest
-
-deploy:swarm:
-  stage: deploy
-  image: alpine:3.19
-  rules:
-    - if: $CI_COMMIT_BRANCH == "main"
-  before_script:
-    - apk add --no-cache openssh-client
-    - eval $(ssh-agent -s)
-    - echo "$SWARM_MANAGER_SSH_KEY" | tr -d '\r' | ssh-add -
-    - mkdir -p ~/.ssh && chmod 700 ~/.ssh
-    - ssh-keyscan $SWARM_MANAGER_IP >> ~/.ssh/known_hosts
-  script:
-    - ssh deploy@$SWARM_MANAGER_IP "
-      docker service update
-      --image $REGISTRY_GATEWAY:$CI_COMMIT_SHA
-      --update-parallelism 1
-      --update-delay 10s
-      --update-failure-action rollback
-      --update-order start-first
-      pixpro_gateway
-      &&
-      docker service update
-      --image $REGISTRY_AUTH:$CI_COMMIT_SHA
-      --update-parallelism 1
-      --update-delay 10s
-      --update-failure-action rollback
-      --update-order start-first
-      pixpro_auth
-      &&
-      docker service update
-      --image $REGISTRY_PROJECTS:$CI_COMMIT_SHA
-      --update-parallelism 1
-      --update-delay 10s
-      --update-failure-action rollback
-      --update-order start-first
-      pixpro_projects
-      &&
-      docker service update
-      --image $REGISTRY_NOTIFICATIONS:$CI_COMMIT_SHA
-      --update-parallelism 1
-      --update-delay 10s
-      --update-failure-action rollback
-      --update-order start-first
-      pixpro_notifications
-      "

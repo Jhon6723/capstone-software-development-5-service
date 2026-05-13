@@ -64,6 +64,52 @@ builder.Services.AddAuthentication(Microsoft.AspNetCore.Authentication.JwtBearer
 
 builder.Services.AddAuthorization();
 
+// Add Controllers for Swagger documentation
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+
+// Configure Swagger
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+    {
+        Title = "PixPro API Gateway",
+        Version = "v1",
+        Description = "Unified API Gateway for PixPro Microservices - Authentication, Projects, and Notifications",
+        Contact = new Microsoft.OpenApi.Models.OpenApiContact
+        {
+            Name = "PixPro Team",
+            Email = "support@pixpro.com"
+        }
+    });
+
+    // Configure JWT Bearer authentication
+    options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Description = "JWT Authorization header using the Bearer scheme. Enter 'Bearer' [space] and then your token",
+        Name = "Authorization",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+        Scheme = "Bearer",
+        BearerFormat = "JWT"
+    });
+
+    options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    {
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                {
+                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
+
 // Configure CORS
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() 
     ?? new[] { "http://localhost:3000" };
@@ -94,6 +140,15 @@ app.UseMiddleware<GlobalExceptionHandlerMiddleware>();
 // Configure the HTTP request pipeline.
 app.UseHttpsRedirection();
 
+// Enable Swagger
+app.UseSwagger();
+app.UseSwaggerUI(options =>
+{
+    options.SwaggerEndpoint("/swagger/v1/swagger.json", "PixPro API Gateway v1");
+    options.RoutePrefix = "swagger";
+    options.DocumentTitle = "PixPro API Gateway";
+});
+
 // Enable CORS
 app.UseCors("GatewayPolicy");
 
@@ -110,7 +165,7 @@ app.UseAuthorization();
 // Health check endpoint
 app.MapHealthChecks("/health");
 
-// Map YARP reverse proxy
+// Map YARP reverse proxy (handles actual requests)
 app.MapReverseProxy();
 
 app.Run();

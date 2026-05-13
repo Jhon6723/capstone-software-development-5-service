@@ -3,8 +3,14 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PixPro.Services.Notifications.Application.Commands.CreateNotification;
 using PixPro.Services.Notifications.Application.Commands.MarkAsRead;
+using PixPro.Services.Notifications.Application.Commands.MarkAllAsRead;
+using PixPro.Services.Notifications.Application.Commands.DeleteNotification;
+using PixPro.Services.Notifications.Application.Queries.GetUserNotifications;
+using PixPro.Services.Notifications.Application.Queries.GetUnreadCount;
+using PixPro.Services.Notifications.Application.Queries.GetNotificationById;
+using PixPro.Services.Notifications.Application.Queries.GetUnreadNotifications;
 using PixPro.Services.Notifications.Application.DTOs.Requests;
-using PixPro.Services.Notifications.Application.Services;
+using PixPro.Services.Notifications.Application.Common.Results;
 
 namespace PixPro.Services.Notifications.API.Controllers;
 
@@ -12,16 +18,13 @@ namespace PixPro.Services.Notifications.API.Controllers;
 [Route("api/[controller]")]
 public class NotificationsController : ControllerBase
 {
-    private readonly INotificationService _notificationService;
     private readonly IMediator _mediator;
     private readonly ILogger<NotificationsController> _logger;
 
     public NotificationsController(
-        INotificationService notificationService,
         IMediator mediator,
         ILogger<NotificationsController> logger)
     {
-        _notificationService = notificationService;
         _mediator = mediator;
         _logger = logger;
     }
@@ -46,11 +49,15 @@ public class NotificationsController : ControllerBase
             result.Value
         );
     }
+    /// <summary>
+    /// Get notification by ID using CQRS pattern with MediatR
+    /// </summary>
     [Authorize]
     [HttpGet("{id}")]
     public async Task<IActionResult> GetNotification(string id)
     {
-        var result = await _notificationService.GetNotificationByIdAsync(id);
+        var query = new GetNotificationByIdQuery(id);
+        var result = await _mediator.Send(query);
 
         if (!result.IsSuccess)
         {
@@ -59,6 +66,9 @@ public class NotificationsController : ControllerBase
 
         return Ok(result.Value);
     }
+    /// <summary>
+    /// Get user notifications using CQRS pattern with MediatR
+    /// </summary>
     [Authorize]
     [HttpGet("user/{userId}")]
     public async Task<IActionResult> GetUserNotifications(
@@ -66,8 +76,8 @@ public class NotificationsController : ControllerBase
         [FromQuery] int pageSize = 20,
         [FromQuery] int page = 1)
     {
-        var request = new GetNotificationsRequest(userId, pageSize, page);
-        var result = await _notificationService.GetUserNotificationsAsync(request);
+        var query = new GetUserNotificationsQuery(userId, pageSize, page);
+        var result = await _mediator.Send(query);
 
         if (!result.IsSuccess)
         {
@@ -77,11 +87,15 @@ public class NotificationsController : ControllerBase
         return Ok(result.Value);
     }
 
+    /// <summary>
+    /// Get unread notifications using CQRS pattern with MediatR
+    /// </summary>
     [Authorize]
     [HttpGet("user/{userId}/unread")]
     public async Task<IActionResult> GetUnreadNotifications(string userId)
     {
-        var result = await _notificationService.GetUnreadNotificationsAsync(userId);
+        var query = new GetUnreadNotificationsQuery(userId);
+        var result = await _mediator.Send(query);
 
         if (!result.IsSuccess)
         {
@@ -91,11 +105,15 @@ public class NotificationsController : ControllerBase
         return Ok(result.Value);
     }
 
+    /// <summary>
+    /// Get unread count using CQRS pattern with MediatR
+    /// </summary>
     [Authorize]
     [HttpGet("user/{userId}/unread-count")]
     public async Task<IActionResult> GetUnreadCount(string userId)
     {
-        var result = await _notificationService.GetUnreadCountAsync(userId);
+        var query = new GetUnreadCountQuery(userId);
+        var result = await _mediator.Send(query);
 
         if (!result.IsSuccess)
         {
@@ -123,11 +141,15 @@ public class NotificationsController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>
+    /// Mark all notifications as read using CQRS pattern with MediatR
+    /// </summary>
     [Authorize]
     [HttpPut("user/{userId}/read-all")]
     public async Task<IActionResult> MarkAllAsRead(string userId)
     {
-        var result = await _notificationService.MarkAllAsReadAsync(userId);
+        var command = new MarkAllAsReadCommand(userId);
+        var result = await _mediator.Send(command);
 
         if (!result.IsSuccess)
         {
@@ -137,11 +159,15 @@ public class NotificationsController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>
+    /// Delete notification using CQRS pattern with MediatR
+    /// </summary>
     [Authorize]
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteNotification(string id)
     {
-        var result = await _notificationService.DeleteNotificationAsync(id);
+        var command = new DeleteNotificationCommand(id);
+        var result = await _mediator.Send(command);
 
         if (!result.IsSuccess)
         {

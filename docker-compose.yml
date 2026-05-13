@@ -1,125 +1,107 @@
 # service/docker-compose.yml
 services:
-
   frontend:
     image: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/client/client:latest
     ports:
       - "80:80"
     networks:
       - pixpro_net
-    deploy:
-      replicas: 2
-      update_config:
-        parallelism: 1
-        delay: 5s
-        failure_action: rollback
-        order: start-first
-      restart_policy:
-        condition: on-failure
-        max_attempts: 3
 
   gateway:
-    image: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/gateway:latest
+    #image: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/gateway:latest
+    build:
+      context: .
+      dockerfile: src/Gateway/API/Dockerfile # Uncomment if you want to build locally instead of using the registry image
     ports:
       - "8080:8080"
     networks:
       - pixpro_net
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
       - Jwt__Secret=${JWT_SECRET}
       - Jwt__Issuer=${JWT_ISSUER}
       - Jwt__Audience=${JWT_AUDIENCE}
       - ReverseProxy__Clusters__auth-cluster__Destinations__auth-api-1__Address=http://auth:8081
       - ReverseProxy__Clusters__projects-cluster__Destinations__projects-api-1__Address=http://projects:8082
       - ReverseProxy__Clusters__notifications-cluster__Destinations__notifications-api-1__Address=http://notifications:8083
-    deploy:
-      replicas: 2
-      update_config:
-        parallelism: 1
-        delay: 10s
-        failure_action: rollback
-        order: start-first
-      restart_policy:
-        condition: on-failure
-        max_attempts: 3
-      placement:
-        constraints:
-          - node.role == worker
 
   auth:
-    image: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/auth:latest
+    #image: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/auth:latest
+    build:
+      context: .
+      dockerfile: src/Services/Auth/API/Dockerfile # Uncomment if you want to build locally instead of using the registry image
     expose:
       - "8081"
     networks:
       - pixpro_net
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - ConnectionStrings__Default=Server=db;Database=PixProAuth;User=sa;Password=${DB_PASSWORD}
-    deploy:
-      replicas: 2
-      update_config:
-        parallelism: 1
-        delay: 10s
-        failure_action: rollback
-        order: start-first
-      restart_policy:
-        condition: on-failure
-        max_attempts: 3
+      - ASPNETCORE_URLS=http://+:8081
+      - AUTH_DB_CONNECTION=Host=db;Port=5432;Database=pixpro_auth;Username=postgres;Password=${DB_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ISSUER=${JWT_ISSUER}
+      - JWT_AUDIENCE=${JWT_AUDIENCE}
+
 
   projects:
-    image: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/projects:latest
+    #image: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/projects:latest
+    build:
+      context: .
+      dockerfile: src/Services/Projects/API/Dockerfile # Uncomment if you want to build locally instead of using the registry image
     expose:
       - "8082"
     networks:
       - pixpro_net
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8082
       - ConnectionStrings__ProjectsDb=Host=projects-db;Port=5432;Database=pixpro_projects;Username=postgres;Password=${PROJECTS_DB_PASSWORD}
-    deploy:
-      replicas: 2
-      update_config:
-        parallelism: 1
-        delay: 10s
-        failure_action: rollback
-        order: start-first
-      restart_policy:
-        condition: on-failure
-        max_attempts: 3
+      - Jwt__Secret=${JWT_SECRET}
+      - Jwt__Issuer=${JWT_ISSUER}
+      - Jwt__Audience=${JWT_AUDIENCE}
+      - Cloudinary__CloudName=${CLOUDINARY_CLOUD_NAME}
+      - Cloudinary__ApiKey=${CLOUDINARY_API_KEY}
+      - Cloudinary__ApiSecret=${CLOUDINARY_API_SECRET}
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__Username=${RABBITMQ_USER}
+      - RabbitMQ__Password=${RABBITMQ_PASSWORD}
+    depends_on:
+      - rabbitmq
+      - projects-db
 
   notifications:
-    image: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/notifications:latest
+    # image: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/notifications:latest
+    build:
+      context: .
+      dockerfile: src/Services/Notifications/API/Dockerfile # Uncomment if you want to build locally instead of using the registry image
     expose:
       - "8083"
     networks:
       - pixpro_net
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8083
       - ConnectionStrings__NotificationsDb=mongodb://${NOTIFICATIONS_DB_USER}:${NOTIFICATIONS_DB_PASSWORD}@notifications-db:27017/pixpro_notifications?authSource=admin
+      - ConnectionStrings__Redis=redis:6379
+      - Redis__Password=${REDIS_PASSWORD}
       - RabbitMQ__Host=rabbitmq
       - RabbitMQ__Username=${RABBITMQ_USER}
       - RabbitMQ__Password=${RABBITMQ_PASSWORD}
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_ISSUER=${JWT_ISSUER}
-      - JWT_AUDIENCE=${JWT_AUDIENCE}
+      - Jwt__Secret=${JWT_SECRET}
+      - Jwt__Issuer=${JWT_ISSUER}
+      - Jwt__Audience=${JWT_AUDIENCE}
     depends_on:
       - rabbitmq
       - notifications-db
-    deploy:
-      replicas: 2
-      update_config:
-        parallelism: 1
-        delay: 10s
-        failure_action: rollback
-        order: start-first
-      restart_policy:
-        condition: on-failure
-        max_attempts: 3
+      - redis
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
     ports:
-      - "5672:5672"      # AMQP port
-      - "15672:15672"    # Management UI
+      - "5672:5672" # AMQP port
+      - "15672:15672" # Management UI
+
     environment:
       - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
       - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
@@ -127,11 +109,6 @@ services:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - pixpro_net
-    deploy:
-      replicas: 1
-      placement:
-        constraints:
-          - node.role == manager
 
   db:
     image: postgres:16-alpine
@@ -145,11 +122,6 @@ services:
       - db_data:/var/lib/postgresql/data
     networks:
       - pixpro_net
-    deploy:
-      replicas: 1
-      placement:
-        constraints:
-          - node.role == manager
 
   projects-db:
     image: postgres:16-alpine
@@ -163,11 +135,6 @@ services:
       - projects_db_data:/var/lib/postgresql/data
     networks:
       - pixpro_net
-    deploy:
-      replicas: 1
-      placement:
-        constraints:
-          - node.role == manager
 
   notifications-db:
     image: mongo:7.0
@@ -181,11 +148,21 @@ services:
       - notifications_db_data:/data/db
     networks:
       - pixpro_net
-    deploy:
-      replicas: 1
-      placement:
-        constraints:
-          - node.role == manager
+
+  redis:
+    image: redis:7.2-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    networks:
+      - pixpro_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
 networks:
   pixpro_net:
@@ -196,3 +173,4 @@ volumes:
   projects_db_data:
   notifications_db_data:
   rabbitmq_data:
+  redis_data:

@@ -32,6 +32,36 @@ public sealed class ImageConfiguration : IEntityTypeConfiguration<Image>
             .HasColumnType("varchar(500)")
             .IsRequired();
 
+        builder.Property(i => i.CloudinaryPublicId)
+            .HasColumnName("cloudinary_public_id")
+            .HasColumnType("varchar(512)")
+            .IsRequired();
+
+        builder.Property(i => i.SecureUrl)
+            .HasColumnName("secure_url")
+            .HasColumnType("varchar(1024)")
+            .IsRequired();
+
+        builder.Property(i => i.Format)
+            .HasColumnName("format")
+            .HasColumnType("varchar(20)")
+            .IsRequired();
+
+        builder.Property(i => i.SizeInBytes)
+            .HasColumnName("size_in_bytes")
+            .HasColumnType("bigint")
+            .IsRequired();
+
+        builder.Property(i => i.Width)
+            .HasColumnName("width")
+            .HasColumnType("integer")
+            .IsRequired();
+
+        builder.Property(i => i.Height)
+            .HasColumnName("height")
+            .HasColumnType("integer")
+            .IsRequired();
+
         builder.Property(i => i.Status)
             .HasColumnName("status")
             .HasColumnType("varchar(20)")

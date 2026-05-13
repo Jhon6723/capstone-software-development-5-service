@@ -1,3 +1,4 @@
+using System.Text.Json;
 using PixPro.Services.Notifications.Domain.Enums;
 
 namespace PixPro.Services.Notifications.Infrastructure.Messaging.Events;
@@ -37,12 +38,17 @@ public record NotificationEvent(
     Dictionary<string, string>? Metadata = null
 );
 
+public record ImageUploadedEvent(
+    string ImageId,
+    string OwnerId
+);
+
 public record ImageProcessingCompletedEvent(
     string ImageId,
     string UserId,
     string ImageUrl,
     string ProcessedImageUrl,
-    Dictionary<string, string> ProcessingResults,
+    JsonElement? ProcessingResults,
     DateTime CompletedAt
 );
 

@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PixPro.Services.Projects.Application.DTOs.Requests;
 using PixPro.Services.Projects.Application.Services;
+using System.Security.Claims;
 
 namespace PixPro.Services.Projects.API.Controllers;
 
@@ -21,21 +22,25 @@ public class ImagesController : ControllerBase
     [Authorize]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Upload(
         IFormFile file,
         CancellationToken cancellationToken)
     {
-        var ownerId = Guid.TryParse(User.FindFirst("sub")?.Value, out var parsed)
-            ? parsed
-            : Guid.Parse("00000000-0000-0000-0000-000000000001");
+        var ownerIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)
+                           ?? User.FindFirst("sub");
+
+        if (ownerIdClaim == null)
+            return Unauthorized(new { error = "Invalid token: user ID not found." });
+
+        if (!Guid.TryParse(ownerIdClaim.Value, out var ownerId))
+            return BadRequest(new { error = "Invalid user ID format." });
 
         var request = new UploadImageRequest(file, ownerId);
         var result = await _imageService.UploadAsync(request, cancellationToken);
 
         if (!result.IsSuccess)
-        {
             return BadRequest(new { error = result.Error });
-        }
 
         return StatusCode(StatusCodes.Status201Created, result.Value);
     }

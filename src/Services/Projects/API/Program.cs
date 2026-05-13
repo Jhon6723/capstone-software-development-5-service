@@ -1,11 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using PixPro.Services.Projects.Application;
+using PixPro.Services.Projects.Application.Interfaces;
 using PixPro.Services.Projects.Application.Ports;
 using PixPro.Services.Projects.Domain.Repositories;
 using PixPro.Services.Projects.Infrastructure.Messaging;
 using PixPro.Services.Projects.Infrastructure.Persistence;
 using PixPro.Services.Projects.Infrastructure.Persistence.Repositories;
+using PixPro.Services.Projects.Application.Services;
+using PixPro.Services.Projects.Infrastructure.Cloudinary;
 using PixPro.Services.Projects.Infrastructure.Processing;
 
 // Load .env file if it exists (for local development without Docker)
@@ -17,6 +20,8 @@ if (File.Exists(envPath))
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Configuration.AddEnvironmentVariables();
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHealthChecks();
@@ -26,6 +31,11 @@ builder.Services.AddDbContext<ProjectsDbContext>(options =>
 
 builder.Services.AddScoped<IProjectRepository, ProjectRepository>();
 builder.Services.AddScoped<IImageRepository, ImageRepository>();
+builder.Services.AddSingleton<IMessagePublisher, RabbitMqMessagePublisher>();
+builder.Services.Configure<CloudinaryOptions>(
+    builder.Configuration.GetSection(CloudinaryOptions.SectionName));
+
+builder.Services.AddScoped<IStorageService, CloudinaryStorageService>();
 builder.Services.AddApplicationServices();
 builder.Services.AddScoped<IImageProcessor, MockAiImageProcessor>();
 builder.Services.AddHostedService<RabbitMqImageProcessingConsumer>();
