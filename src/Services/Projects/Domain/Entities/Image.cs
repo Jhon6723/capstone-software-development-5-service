@@ -30,6 +30,10 @@ public sealed class Image
         CreatedAt = DateTimeOffset.UtcNow;
     }
 
+    public void MarkAsProcessing() => Status = "Processing";
+    public void MarkAsProcessed() => Status = "Processed";
+    public void MarkAsFailed() => Status = "Failed";
+
     private Image()
     {
         FileName = string.Empty;

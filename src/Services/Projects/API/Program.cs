@@ -1,9 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using PixPro.Services.Projects.Application;
+using PixPro.Services.Projects.Application.Ports;
 using PixPro.Services.Projects.Domain.Repositories;
+using PixPro.Services.Projects.Infrastructure.Messaging;
 using PixPro.Services.Projects.Infrastructure.Persistence;
 using PixPro.Services.Projects.Infrastructure.Persistence.Repositories;
+using PixPro.Services.Projects.Infrastructure.Processing;
 
 // Load .env file if it exists (for local development without Docker)
 var envPath = Path.Combine(Directory.GetCurrentDirectory(), "../../../../.env");
@@ -24,6 +27,8 @@ builder.Services.AddDbContext<ProjectsDbContext>(options =>
 builder.Services.AddScoped<IProjectRepository, ProjectRepository>();
 builder.Services.AddScoped<IImageRepository, ImageRepository>();
 builder.Services.AddApplicationServices();
+builder.Services.AddScoped<IImageProcessor, MockAiImageProcessor>();
+builder.Services.AddHostedService<RabbitMqImageProcessingConsumer>();
 
 // Configure JWT Authentication
 var jwtSecret = builder.Configuration["Jwt:Secret"] ?? throw new InvalidOperationException("JWT Secret not configured");

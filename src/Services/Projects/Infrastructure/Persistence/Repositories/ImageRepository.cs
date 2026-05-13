@@ -13,8 +13,14 @@ public sealed class ImageRepository(ProjectsDbContext context) : IImageRepositor
         await _context.Images.AddAsync(image, cancellationToken);
     }
 
+    public async Task<Image?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        return await _context.Images.FirstOrDefaultAsync(image => image.Id == id, cancellationToken);
+    }
+
     public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         return await _context.SaveChangesAsync(cancellationToken);
     }
 }
+
