@@ -349,7 +349,6 @@ public class RabbitMqConsumer : BackgroundService
         {
             using var scope = _serviceProvider.CreateScope();
             var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
-            var webSocketService = scope.ServiceProvider.GetRequiredService<IWebSocketNotificationService>();
 
             var metadata = new Dictionary<string, string>
             {
@@ -377,16 +376,8 @@ public class RabbitMqConsumer : BackgroundService
 
             var notificationResult = await mediator.Send(command);
 
-            if (notificationResult.IsSuccess && notificationResult.Value != null)
+            if (notificationResult.IsSuccess)
             {
-                var wsNotification = new
-                {
-                    type = "IMAGE_PROCESSING_COMPLETED",
-                    notification = notificationResult.Value,
-                    timestamp = DateTime.UtcNow
-                };
-
-                await webSocketService.SendNotificationAsync(imageEvent.UserId, wsNotification);
                 _logger.LogInformation($"Image processing completed notification sent to user {imageEvent.UserId}");
             }
             else
@@ -406,7 +397,6 @@ public class RabbitMqConsumer : BackgroundService
         {
             using var scope = _serviceProvider.CreateScope();
             var mediator = scope.ServiceProvider.GetRequiredService<IMediator>();
-            var webSocketService = scope.ServiceProvider.GetRequiredService<IWebSocketNotificationService>();
 
             var metadata = new Dictionary<string, string>
             {
@@ -428,21 +418,8 @@ public class RabbitMqConsumer : BackgroundService
 
             var notificationResult = await mediator.Send(command);
 
-            if (notificationResult.IsSuccess && notificationResult.Value != null)
+            if (notificationResult.IsSuccess)
             {
-                var wsNotification = new
-                {
-                    type = "IMAGE_PROCESSING_FAILED",
-                    notification = notificationResult.Value,
-                    error = new
-                    {
-                        message = imageEvent.ErrorMessage,
-                        code = imageEvent.ErrorCode
-                    },
-                    timestamp = DateTime.UtcNow
-                };
-
-                await webSocketService.SendNotificationAsync(imageEvent.UserId, wsNotification);
                 _logger.LogInformation($"Image processing failed notification sent to user {imageEvent.UserId}");
             }
             else
@@ -572,10 +549,23 @@ public class RabbitMqConsumer : BackgroundService
             };
         }
 
+        // Build error details for failed events
+        object? errorDetails = null;
+        if (notificationType == "IMAGE_PROCESSING_FAILED" && @event.Metadata != null)
+        {
+            @event.Metadata.TryGetValue("errorMessage", out var errorMessage);
+            @event.Metadata.TryGetValue("errorCode", out var errorCode);
+            if (errorMessage != null || errorCode != null)
+            {
+                errorDetails = new { message = errorMessage, code = errorCode };
+            }
+        }
+
         var wsNotification = new
         {
             type = notificationType,
             notification = notification,
+            error = errorDetails,
             timestamp = DateTime.UtcNow
         };
 
