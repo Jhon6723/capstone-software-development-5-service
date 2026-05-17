@@ -118,7 +118,9 @@ builder.Services.AddCors(options =>
     
     options.AddPolicy("WebSocketPolicy", policy =>
     {
-        policy.WithOrigins("http://localhost:3000", "http://localhost:5173")
+        policy.WithOrigins(
+                "https://localhost:3000", "https://localhost:5173",
+                "http://localhost:3000",  "http://localhost:5173")
               .AllowAnyMethod()
               .AllowAnyHeader()
               .AllowCredentials();

@@ -77,11 +77,14 @@ services:
       dockerfile: src/Services/Notifications/API/Dockerfile # Uncomment if you want to build locally instead of using the registry image
     expose:
       - "8083"
+      - "8443"
+    ports:
+      - "8443:8443"
     networks:
       - pixpro_net
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
-      - ASPNETCORE_URLS=http://+:8083
+      - ASPNETCORE_URLS=http://+:8083;https://+:8443
       - ConnectionStrings__NotificationsDb=mongodb://${NOTIFICATIONS_DB_USER}:${NOTIFICATIONS_DB_PASSWORD}@notifications-db:27017/pixpro_notifications?authSource=admin
       - ConnectionStrings__Redis=redis:6379
       - Redis__Password=${REDIS_PASSWORD}
@@ -91,6 +94,7 @@ services:
       - Jwt__Secret=${JWT_SECRET}
       - Jwt__Issuer=${JWT_ISSUER}
       - Jwt__Audience=${JWT_AUDIENCE}
+      - Kestrel__Endpoints__Https__Certificate__Password=${KESTREL_CERT_PASSWORD}
     depends_on:
       - rabbitmq
       - notifications-db
