@@ -215,6 +215,12 @@ FakesAssemblies/
 # Environment variables and secrets
 .env
 
+# TLS certificates and private keys
+**/certs/*.pfx
+**/certs/*.key
+**/certs/*.crt
+**/certs/*.pem
+
 # Local configuration files with sensitive data
 scripts/
 

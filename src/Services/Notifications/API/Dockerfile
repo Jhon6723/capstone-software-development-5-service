@@ -1,6 +1,7 @@
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
 WORKDIR /app
 EXPOSE 8083
+EXPOSE 8443
 
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
@@ -27,6 +28,9 @@ FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
 
-ENV ASPNETCORE_URLS=http://+:8083
+# Copy TLS certificate into the image
+COPY src/Services/Notifications/API/certs/ /app/certs/
+
+ENV ASPNETCORE_URLS=http://+:8083;https://+:8443
 
 ENTRYPOINT ["dotnet", "API.dll"]
