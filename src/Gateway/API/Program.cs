@@ -127,7 +127,15 @@ builder.Services.AddCors(options =>
 
 // Add YARP reverse proxy
 builder.Services.AddReverseProxy()
-    .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"));
+    .LoadFromConfig(builder.Configuration.GetSection("ReverseProxy"))
+    .ConfigureHttpClient((context, handler) =>
+    {
+        // Allow self-signed certificates for upstream services in development
+        if (builder.Environment.IsDevelopment())
+        {
+            handler.SslOptions.RemoteCertificateValidationCallback = (_, _, _, _) => true;
+        }
+    });
 
 // Add health checks
 builder.Services.AddHealthChecks();
