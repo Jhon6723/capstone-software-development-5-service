@@ -11,7 +11,6 @@ using PixPro.Services.Auth.Application.Services.Implementations;
 using PixPro.Services.Auth.Application.Services.Interfaces;
 using PixPro.Services.Auth.Domain.Entities;
 using PixPro.Services.Auth.Domain.Repositories;
-using Xunit;
 
 namespace PixPro.UnitTests.Services;
 

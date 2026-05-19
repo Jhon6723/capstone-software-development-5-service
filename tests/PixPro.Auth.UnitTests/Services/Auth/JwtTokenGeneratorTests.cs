@@ -4,9 +4,8 @@ using Microsoft.Extensions.Configuration;
 using Moq;
 using PixPro.Services.Auth.Application.Services.Implementations;
 using PixPro.Services.Auth.Application.Services.Interfaces;
-using Xunit;
 
-namespace Auth.Application.UnitTests.Services;
+namespace Auth.Application.UnitTests.Services.Auth;
 
 public class JwtTokenGeneratorTests
 {
