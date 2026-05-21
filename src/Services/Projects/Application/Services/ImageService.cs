@@ -91,7 +91,7 @@ public class ImageService : IImageService
             try
             {
                 await _messagePublisher.PublishAsync(
-                    new ImageUploadedEvent(image.Id, request.OwnerId),
+                    new ImageUploadedEvent(image.Id, request.OwnerId, image.SecureUrl),
                     "image-processing-events",
                     cancellationToken);
 
