@@ -6,17 +6,18 @@ logger = logging.getLogger(__name__)
 
 class RabbitMqResultPublisher:
     def publish(self, queue_name: str, message: dict, channel: pika.channel.Channel) -> None:
-        channel.queue_declare(queue=queue_name, durable=True)
+        # Declare exchange for processed image events
+        channel.exchange_declare(exchange="processed-image-events", exchange_type="fanout", durable=True)
 
         body = json.dumps(message, default=str).encode("utf-8")
 
         channel.basic_publish(
-            exchange="",
-            routing_key=queue_name,
+            exchange="processed-image-events",
+            routing_key="",
             body=body,
             properties=pika.BasicProperties(
                 delivery_mode=2,
                 content_type="application/json",
             ),
         )
-        logger.info("Published message to queue '%s'", queue_name)
+        logger.info("Published message to exchange 'processed-image-events'")
