@@ -79,11 +79,26 @@ services:
     networks:
       - pixpro_net
     environment:
+      - DATABASE_URL=postgresql://postgres:${IA_DB_PASSWORD}@ia-db:5432/pixpro_ia
       - RabbitMQ__Host=rabbitmq
       - RabbitMQ__Username=${RABBITMQ_USER}
       - RabbitMQ__Password=${RABBITMQ_PASSWORD}
     depends_on:
       - rabbitmq
+      - ia-db
+
+  ia-db:
+    image: postgres:16-alpine
+    ports:
+      - "5434:5432"
+    environment:
+      - POSTGRES_DB=pixpro_ia
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${IA_DB_PASSWORD}
+    volumes:
+      - ia_db_data:/var/lib/postgresql/data
+    networks:
+      - pixpro_net
 
   notifications:
     # image: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/notifications:latest
@@ -188,6 +203,7 @@ networks:
     driver: bridge
 
 volumes:
+  ia_db_data:
   db_data:
   projects_db_data:
   notifications_db_data:

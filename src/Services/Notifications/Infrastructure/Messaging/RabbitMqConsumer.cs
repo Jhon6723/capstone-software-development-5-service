@@ -48,6 +48,7 @@ public class RabbitMqConsumer : BackgroundService
             ConsumeQueue("project-events", HandleProjectEvent, stoppingToken);
             ConsumeQueue("notifications", HandleNotificationEvent, stoppingToken);
             ConsumeQueue("image-processing-events", HandleImageProcessingEvent, stoppingToken);
+            ConsumeQueue("processed-image-events", HandleImageProcessingEvent, stoppingToken);
             ConsumeQueue("notification-domain-events", HandleDomainEvent, stoppingToken);
 
             _logger.LogInformation("RabbitMQ Consumer started successfully");
@@ -76,11 +77,21 @@ public class RabbitMqConsumer : BackgroundService
         _connection = factory.CreateConnection();
         _channel = _connection.CreateModel();
 
+        // Declare exchanges
+        _channel.ExchangeDeclare("image-events", ExchangeType.Fanout, durable: true);
+        _channel.ExchangeDeclare("processed-image-events", ExchangeType.Fanout, durable: true);
+
+        // Declare and bind queues
         _channel.QueueDeclare(queue: "user-events", durable: true, exclusive: false, autoDelete: false);
         _channel.QueueDeclare(queue: "project-events", durable: true, exclusive: false, autoDelete: false);
         _channel.QueueDeclare(queue: "image-processing-events", durable: true, exclusive: false, autoDelete: false);
+        _channel.QueueDeclare(queue: "processed-image-events", durable: true, exclusive: false, autoDelete: false);
         _channel.QueueDeclare(queue: "notifications", durable: true, exclusive: false, autoDelete: false);
         _channel.QueueDeclare(queue: "notification-domain-events", durable: true, exclusive: false, autoDelete: false);
+
+        // Bind queues to exchanges
+        _channel.QueueBind("image-processing-events", "image-events", "");
+        _channel.QueueBind("processed-image-events", "processed-image-events", "");
 
         _logger.LogInformation("RabbitMQ connection established");
     }

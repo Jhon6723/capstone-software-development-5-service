@@ -15,7 +15,7 @@ from app.publisher import RabbitMqResultPublisher
 logger = logging.getLogger(__name__)
 
 class RabbitMqImageConsumer:
-    QUEUE_NAME = "image-processing-events"
+    QUEUE_NAME = "ia-processing-queue"
 
     def __init__(self, host: str, username: str, password: str):
         self._host = host
@@ -44,11 +44,17 @@ class RabbitMqImageConsumer:
             self._connection = pika.BlockingConnection(parameters)
             self._channel = self._connection.channel()
 
-            self._channel.queue_declare(queue=self.QUEUE_NAME, durable=True)
+            # Declare exchange
+            self._channel.exchange_declare(exchange="image-events", exchange_type="fanout", durable=True)
+
+            # Declare and bind queue for IA
+            self._channel.queue_declare(queue="ia-processing-queue", durable=True)
+            self._channel.queue_bind(queue="ia-processing-queue", exchange="image-events", routing_key="")
+
             self._channel.basic_qos(prefetch_count=1)
 
             self._channel.basic_consume(
-                queue=self.QUEUE_NAME,
+                queue="ia-processing-queue",
                 on_message_callback=self._on_message,
                 auto_ack=False,
             )

@@ -29,17 +29,14 @@ public class RabbitMqMessagePublisher : IMessagePublisher, IDisposable
         _connection = factory.CreateConnection();
         _channel = _connection.CreateModel();
 
+        // Declare exchange for image events
+        _channel.ExchangeDeclare("image-events", ExchangeType.Fanout, durable: true);
+
         _logger.LogInformation("RabbitMQ publisher connection established");
     }
 
     public Task PublishAsync<T>(T message, string queueName, CancellationToken cancellationToken = default)
     {
-        _channel.QueueDeclare(
-            queue: queueName,
-            durable: true,
-            exclusive: false,
-            autoDelete: false);
-
         var json = JsonSerializer.Serialize(message);
         var body = Encoding.UTF8.GetBytes(json);
 
@@ -47,15 +44,15 @@ public class RabbitMqMessagePublisher : IMessagePublisher, IDisposable
         properties.Persistent = true;
         properties.ContentType = "application/json";
 
+        // Publish to exchange instead of direct queue
         _channel.BasicPublish(
-            exchange: string.Empty,
-            routingKey: queueName,
+            exchange: "image-events",
+            routingKey: "",
             basicProperties: properties,
             body: body);
 
         _logger.LogInformation(
-            "Published message to queue '{QueueName}': {MessageType}",
-            queueName,
+            "Published message to exchange 'image-events': {MessageType}",
             typeof(T).Name);
 
         return Task.CompletedTask;
