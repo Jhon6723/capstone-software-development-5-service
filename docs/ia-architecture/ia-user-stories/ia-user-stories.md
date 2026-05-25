@@ -5,27 +5,15 @@
 ### Story 98: Multi-tier AI Image Processing
 **As a user, I want the system to automatically route image processing requests to appropriate AI models based on my subscription tier (Default/Standard/AI Reasoning) so I get cost-effective results.**
 
-**Files to include:**
-- `app/processors/base.py` - Updated ModelTier enum
-- `app/services/image_processor.py` - New routing logic
-
 ---
 
 ### Story 99: OpenAI Quality Parameter Support  
 **As a developer, I want the OpenAI processor to support quality parameters (low/high) so I can control processing costs and output quality.**
 
-**Files to include:**
-- `app/processors/openai_processor.py` - Quality parameter implementation
-- `requirements.txt` - OpenAI SDK upgrade to 1.78.0
-
 ---
 
 ### Story 100: Pollinations.ai Integration
 **As a user, I want access to Pollinations.ai models for standard tier processing so I have an affordable alternative to premium AI services.**
-
-**Files to include:**
-- `app/processors/pollinations.py` - New PollinationsProcessor
-- `app/processors/__init__.py` - Export PollinationsProcessor
 
 ---
 
@@ -37,15 +25,6 @@
 - Make `ImageUrl` optional in events and database schema
 - Route "flux-schnell" model to PixazoProcessor
 - Download images from Pixazo's JSON response (output URL)
-
-**Files to include:**
-- `app/processors/pixazo.py` - New PixazoProcessor for Flux Schnell API
-- `app/processors/base.py` - Added PIXAZO tier to ModelTier enum
-- `app/models/events.py` - Made ImageUrl optional in all events
-- `app/models/database.py` - Made original_image_url nullable
-- `app/models/schemas.py` - Made original_image_url optional
-- `app/services/image_processor.py` - Added PIXAZO tier routing
-- `docker-compose.yml` - Added PIXAZO_API_KEY environment variable
 
 ---
 
@@ -60,11 +39,6 @@
 - Return specific error code `CONTENT_MODERATION_VIOLATION` to clients
 - Support optional OpenAI Moderation API as secondary layer
 
-**Files to include:**
-- `app/services/guardrails.py` - Content moderation service with keyword filtering
-- `app/services/image_processor.py` - Integrated guardrails check before processing
-- `app/infrastructure/rabbitmq.py` - Handle ContentModerationError with specific error code
-
 ---
 
 ### Story 104: Cloudinary Image Upload System
@@ -75,10 +49,6 @@
 - Generate secure URLs for uploaded images
 - Download source images from URLs for processing
 - Handle upload failures gracefully
-
-**Files to include:**
-- `app/infrastructure/cloudinary.py` - Cloudinary client configuration and upload/download
-- `app/services/cloudinary_service.py` - Service wrapper for Cloudinary operations
 
 ---
 
@@ -92,11 +62,6 @@
 - Store processing parameters and error messages
 - Nullable original_image_url for text-to-image support
 
-**Files to include:**
-- `app/models/database.py` - SQLAlchemy models (ProcessingJob, Base)
-- `app/services/database_service.py` - Database operations (create_job, update_job_status)
-- `app/infrastructure/database.py` - Database connection and initialization
-
 ---
 
 ### Story 106: Docker Containerization
@@ -109,10 +74,6 @@
 - Environment variable configuration
 - Health checks and service dependencies
 
-**Files to include:**
-- `Dockerfile` - Python 3.12-slim, dependency installation, app setup
-- `docker-compose.yml` - Service orchestration with RabbitMQ, PostgreSQL, IA service
-
 ---
 
 ### Story 107: Architecture Documentation
@@ -124,10 +85,6 @@
 - Include sequence diagrams for image processing flow
 - Document RabbitMQ event exchange architecture
 - Include user stories and implementation summary
-
-**Files to include:**
-- `docs/ia-architecture/ia-architecture.md` - System architecture, pricing, model comparison
-- `docs/ia-architecture/ia-user-stories.md` - This user stories document
 
 ## Implementation Summary
 

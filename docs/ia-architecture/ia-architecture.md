@@ -7,30 +7,33 @@ src/Services/IA/
 ├── app/
 │   ├── __init__.py
 │   ├── main.py                    # FastAPI entry point
-│   ├── config.py                 # Configuration
-│   ├── models/                   # Data models
+│   ├── config.py                  # Configuration
+│   ├── models/                    # Data models
 │   │   ├── __init__.py
-│   │   ├── events.py             # RabbitMQ event models
-│   │   ├── database.py           # Database models
-│   │   └── schemas.py           # Pydantic schemas
-│   ├── services/                 # Business logic
+│   │   ├── events.py              # RabbitMQ event models
+│   │   ├── database.py            # SQLAlchemy models
+│   │   └── schemas.py             # Pydantic schemas
+│   ├── services/                  # Business logic
 │   │   ├── __init__.py
-│   │   ├── image_processor.py    # Image processing logic
-│   │   ├── cloudinary_service.py # Cloudinary operations
-│   │   └── database_service.py   # Database operations
-│   ├── infrastructure/           # External integrations
+│   │   ├── image_processor.py     # Image processing orchestrator
+│   │   ├── guardrails.py          # Content moderation / safety filter
+│   │   ├── cloudinary_service.py  # Cloudinary operations
+│   │   └── database_service.py    # Database CRUD operations
+│   ├── infrastructure/            # External integrations
 │   │   ├── __init__.py
-│   │   ├── database.py          # DB connection
-│   │   ├── rabbitmq.py          # RabbitMQ consumer/publisher
-│   │   └── cloudinary.py         # Cloudinary client
-│   └── processors/              # AI processors (plug-in)
+│   │   ├── database.py            # PostgreSQL connection
+│   │   ├── rabbitmq.py            # RabbitMQ consumer/publisher
+│   │   └── cloudinary.py          # Cloudinary client
+│   └── processors/                # AI processors (plug-in architecture)
 │       ├── __init__.py
-│       ├── base.py
-│       ├── huggingface.py
-│       └── mock.py
-├── alembic/                      # DB migrations
+│       ├── base.py                # Base processor interface
+│       ├── pixazo.py              # Pixazo.ai Flux Schnell (text-to-image)
+│       ├── openai.py              # OpenAI GPT Image (image-to-image)
+│       └── pollinations.py        # Pollinations.ai Kontext (image-to-image)
+├── alembic/                       # DB migrations
 ├── requirements.txt
-└── Dockerfile
+├── Dockerfile
+└── docker-compose.yml
 ```
 
 ### **Layer Responsibilities**
@@ -41,12 +44,18 @@ src/Services/IA/
 - Pydantic schemas (validation)
 
 **Services Layer** - Business logic
-- `ImageProcessor`: Orchestrate processing workflow
+- `ImageProcessor`: Orchestrate processing workflow, route to AI providers
+- `Guardrails`: Content moderation, safety filtering (sexual, violence, hate, self-harm)
 - `CloudinaryService`: Upload/delete images
-- `DatabaseService`: CRUD operations
+- `DatabaseService`: CRUD operations for job records
+
+**Processors Layer** - AI provider integrations (plug-in architecture)
+- `PixazoProcessor`: Text-to-image generation with Flux Schnell
+- `OpenAIProcessor`: Image-to-image editing with GPT Image
+- `PollinationsProcessor`: Image-to-image editing with FLUX.1 Kontext
 
 **Infrastructure Layer** - External systems
-- Database connection
+- Database connection (PostgreSQL)
 - RabbitMQ consumer/publisher
 - Cloudinary SDK wrapper
 
@@ -95,9 +104,10 @@ The IA service supports **3 tiers** across two providers (OpenAI + Pollinations.
 
 | Tier | Model key | Provider | Task | Cost / image | Quality |
 |------|-----------|----------|------|--------------|---------|
-| **Default** ⭐ | `gpt-image-1-mini-low` | OpenAI (`quality=low`) | image edit | ~$0.011 | ⭐⭐⭐⭐ |
+| **Budget** ⭐ | `flux-schnell` | Pixazo.ai | **text-to-image** | **~$0.0012** | ⭐⭐⭐⭐ |
+| Default | `gpt-image-1-mini-low` | OpenAI (`quality=low`) | image-to-image | ~$0.011 | ⭐⭐⭐⭐ |
 | Standard | `kontext` (FLUX.1 Kontext) | Pollinations.ai | image-to-image | ~$0.04 | ⭐⭐⭐⭐⭐ |
-| AI Reasoning | `gpt-image-1-mini-high` | OpenAI (`quality=high`) | image edit | ~$0.167 | ⭐⭐⭐⭐⭐ |
+| AI Reasoning | `gpt-image-1-mini-high` | OpenAI (`quality=high`) | image-to-image | ~$0.167 | ⭐⭐⭐⭐⭐ |
 
 ### **Model Comparison**
 
@@ -110,13 +120,15 @@ The IA service supports **3 tiers** across two providers (OpenAI + Pollinations.
 
 All figures below are per single output image. Pollinations prices verified live against `GET https://gen.pollinations.ai/models`.
 
-| Tier | Model | Provider | Approx. cost per image | Approx. latency | Notes |
-|------|-------|----------|------------------------|-----------------|-------|
-| **Default** ⭐ | `gpt-image-1-mini` (low) | OpenAI | **$0.011** | ~5–8 s | Already paid OpenAI account |
-| Standard | `kontext` (FLUX.1 Kontext) | Pollinations.ai | ~$0.04 (0.04 Pollen) | ~6–10 s | $2 ≈ 50 edits |
-| AI Reasoning | `gpt-image-1-mini` (high) | OpenAI | $0.167 | ~20–30 s | Premium quality |
+| Tier | Model | Provider | Task | Approx. cost per image | Approx. latency | Notes |
+|------|-------|----------|------|------------------------|-----------------|-------|
+| **Budget** ⭐ | `flux-schnell` | Pixazo.ai | **text-to-image** | **~$0.0012** | ~4–6 s | Cheapest option, no source image needed |
+| Default | `gpt-image-1-mini` (low) | OpenAI | image-to-image | ~$0.011 | ~5–8 s | Already paid OpenAI account |
+| Standard | `kontext` (FLUX.1 Kontext) | Pollinations.ai | image-to-image | ~$0.04 (0.04 Pollen) | ~6–10 s | $2 ≈ 50 edits |
+| AI Reasoning | `gpt-image-1-mini` (high) | OpenAI | image-to-image | ~$0.167 | ~20–30 s | Premium quality |
 
 **Bottom line:**
+- For *text-to-image generation*: **`flux-schnell` on Pixazo** — ~$0.0012 each, cheapest option, no source image required.
 - For *everyday cheap edits*: **`gpt-image-1-mini-low`** — ~$0.011 each, predictable, already on OpenAI billing.
 - For *high-quality instruction-based editing*: **`kontext` (FLUX.1 Kontext) on Pollinations** — best img2img model in the FLUX family.
 - For *complex reasoning prompts*: **`gpt-image-1-mini-high`** (AI Reasoning tier).
@@ -141,93 +153,501 @@ All figures below are per single output image. Pollinations prices verified live
 
 ```python
 class ModelTier(Enum):
-    DEFAULT      = "gpt-image-1-mini-low"   # OpenAI gpt-image-1-mini, quality=low  (~$0.011/img)
-    STANDARD     = "kontext"                # Pollinations FLUX.1 Kontext           (~$0.04/img)
-    AI_REASONING = "gpt-image-1-mini-high"  # OpenAI gpt-image-1-mini, quality=high (~$0.167/img)
+    PIXAZO       = "flux-schnell"           # Pixazo Flux Schnell                   (~$0.0012/img)  [text-to-image]
+    DEFAULT      = "gpt-image-1-mini-low"   # OpenAI gpt-image-1-mini, quality=low  (~$0.011/img)   [image-to-image]
+    STANDARD     = "kontext"                # Pollinations FLUX.1 Kontext           (~$0.04/img)    [image-to-image]
+    AI_REASONING = "gpt-image-1-mini-high"  # OpenAI gpt-image-1-mini, quality=high (~$0.167/img)   [image-to-image]
 ```
 
 The user can explicitly select a tier via the `model` parameter in the upload event. If no model is specified, the system uses **`gpt-image-1-mini-low`** — the cheapest reliable option, paid for on the existing OpenAI account.
 
 
-## **System Flows**
+## **System Flows (Mermaid Diagrams)**
 
-### **1. Image Upload Flow**
+### **1. Text-to-Image vs Image-to-Image Flow Comparison**
 
-This is what happens when a user uploads an image for AI editing:
+```mermaid
+flowchart TB
+    subgraph "Text-to-Image (Budget Tier)"
+        A1[User sends prompt] --> B1[Frontend<br/>Angular]
+        B1 -->|HTTP /api/projects| C1[Gateway<br/>YARP]
+        C1 -->|HTTP| D1[Projects Service<br/>.NET]
+        D1 -->|Publish| E1[Image Events Exchange]
+        E1 --> F1[IA Service<br/>Python]
+        F1 --> G1{Content Check}
+        G1 -->|Pass| H1[Pixazo Flux Schnell]
+        H1 --> I1[Download generated image]
+        I1 --> J1[Cloudinary Upload]
+        J1 --> K1[Save to PostgreSQL]
+        K1 --> L1[Publish completion]
+        G1 -->|Blocked| M1[Return error: CONTENT_MODERATION_VIOLATION]
+    end
 
+    subgraph "Image-to-Image (Default/Standard/AI Reasoning)"
+        A2[User uploads image + prompt] --> B2[Frontend<br/>Angular]
+        B2 -->|HTTP /api/projects| C2[Gateway<br/>YARP]
+        C2 -->|HTTP| D2[Projects Service<br/>.NET]
+        D2 --> E2[Cloudinary: Store original]
+        D2 -->|Publish| F2[Image Events Exchange]
+        F2 --> G2[IA Service<br/>Python]
+        G2 --> H2{Content Check}
+        H2 -->|Pass| I2{Model Selection}
+        I2 -->|flux-schnell| J2[Pixazo]
+        I2 -->|gpt-image-1-mini-low| K2[OpenAI Low Quality]
+        I2 -->|kontext| L2[Pollinations]
+        I2 -->|gpt-image-1-mini-high| M2[OpenAI High Quality]
+        J2 & K2 & L2 & M2 --> N2[Cloudinary: Store result]
+        N2 --> O2[PostgreSQL: Save record]
+        O2 --> P2[Publish completion]
+        H2 -->|Blocked| Q2[Return error: CONTENT_MODERATION_VIOLATION]
+    end
 ```
-User → Frontend → Gateway → Projects Service → Cloudinary (store original image)
-                                                      ↓
-                                                RabbitMQ (send event)
-                                                      ↓
-                                                IA Service (process)
-```
-
-Steps:
-1. User uploads image with prompt in the Frontend
-2. Request goes through the API Gateway
-3. Projects Service receives and saves the original image to Cloudinary
-4. Projects Service sends a message to RabbitMQ saying "new image to process"
-5. IA Service receives the message and starts processing
 
 ---
 
-### **2. Image Processing Flow**
+### **2. IA Service Internal Processing Flow**
 
-This is what happens inside the IA Service when processing an image:
+```mermaid
+sequenceDiagram
+    participant R as RabbitMQ
+    participant C as Consumer
+    participant G as Guardrails
+    participant P as ImageProcessor
+    participant M as ModelRouter
+    participant AI as AI Provider
+    participant CL as Cloudinary
+    participant DB as PostgreSQL
+    participant OUT as Output Exchange
 
+    R->>C: ImageUploadedEvent
+    C->>C: Validate event
+    Note over C: ImageUrl optional<br/>for text-to-image
+    
+    alt Content violates policy
+        C->>G: Check prompt
+        G-->>C: ContentModerationError
+        C->>DB: Save as FAILED
+        C->>OUT: ImageProcessingFailedEvent
+        Note over OUT: ErrorCode: CONTENT_MODERATION_VIOLATION
+    else Content safe
+        C->>G: Check prompt
+        G-->>C: Pass
+        C->>P: process(event)
+        P->>M: get_processor(model)
+        
+        alt model = flux-schnell
+            M-->>P: PixazoProcessor
+            P->>AI: POST /flux-1-schnell
+            AI-->>P: JSON {output: url}
+            P->>AI: GET image from url
+            AI-->>P: image bytes
+        else model = gpt-image-1-mini-*
+            M-->>P: OpenAIProcessor
+            P->>AI: POST /v1/images/edits
+            AI-->>P: image bytes
+        else model = kontext
+            M-->>P: PollinationsProcessor
+            P->>AI: POST /v1/images/edits
+            AI-->>P: image bytes
+        end
+        
+        P->>CL: upload_image(bytes)
+        CL-->>P: secure_url
+        P->>DB: update_job(COMPLETED)
+        P->>OUT: ImageProcessingCompletedEvent
+    end
 ```
-RabbitMQ → Consumer → Event Processor → Image Processor → HuggingFace API
-                                                              ↓
-                                        Image Processor ← AI result
-                                                              ↓
-                                        Cloudinary (store result)
-                                                              ↓
-                                        PostgreSQL (save job record)
-                                                              ↓
-                                        RabbitMQ (send completion)
-```
-
-Steps:
-1. Consumer gets the event from RabbitMQ
-2. Event Processor validates the data
-3. Image Processor calls the AI model (HuggingFace or OpenAI)
-4. AI returns the edited image
-5. Result is uploaded to Cloudinary
-6. Job status is saved to PostgreSQL
-7. Completion message is sent to RabbitMQ
 
 ---
 
-### **3. Notification Flow**
+### **3. Model Selection Decision Tree**
 
-This is how the user knows when their image is ready:
-
+```mermaid
+flowchart TD
+    A[Request received] --> B{Has ImageUrl?}
+    B -->|No| C[Text-to-Image]
+    B -->|Yes| D[Image-to-Image]
+    
+    C --> E{model parameter}
+    E -->|flux-schnell| F[Pixazo Flux Schnell<br/>$0.0012/img]
+    E -->|other| G[Invalid: text-to-image<br/>only supports flux-schnell]
+    
+    D --> H{model parameter}
+    H -->|gpt-image-1-mini-low| I[OpenAI Low Quality<br/>$0.011/img]
+    H -->|kontext| J[Pollinations FLUX.1 Kontext<br/>$0.04/img]
+    H -->|gpt-image-1-mini-high| K[OpenAI High Quality<br/>$0.167/img]
+    H -->|flux-schnell| L[Pixazo Flux Schnell<br/>$0.0012/img]
+    H -->|none/default| M[OpenAI Low Quality<br/>$0.011/img]
+    
+    F & I & J & K & L & M --> N[Content Moderation Check]
+    N -->|Pass| O[Process with AI]
+    N -->|Fail| P[Return CONTENT_MODERATION_VIOLATION]
 ```
-RabbitMQ → Notifications Service → WebSocket → Frontend → User sees result
-```
-
-Steps:
-1. Notifications Service gets the completion event
-2. Sends real-time notification via WebSocket
-3. Frontend receives it and shows the processed image to the user
 
 ---
 
-### **4. Complete End-to-End Flow**
+### **4. End-to-End Complete Flow**
 
-Putting it all together:
+```mermaid
+flowchart LR
+    subgraph "User Layer"
+        U[User]
+        F[Frontend<br/>Angular]
+    end
 
+    subgraph "API Layer"
+        G[Gateway<br/>YARP]
+        PS[Projects Service<br/>.NET]
+    end
+
+    subgraph "Storage"
+        CL[Cloudinary<br/>Image CDN]
+        R[(RabbitMQ<br/>Message Broker)]
+    end
+
+    subgraph "IA Processing"
+        IA[IA Service<br/>Python/FastAPI]
+        GR[Guardrails<br/>Content Filter]
+        PR[Processors<br/>AI Integrations]
+        DB[(PostgreSQL<br/>IA Database)]
+    end
+
+    subgraph "AI Providers"
+        PX[Pixazo.ai<br/>Flux Schnell]
+        OA[OpenAI<br/>GPT Image]
+        PO[Pollinations.ai<br/>Kontext]
+    end
+
+    subgraph "Notifications"
+        NS[Notifications Service<br/>.NET]
+    end
+
+    U -->|1. Upload image /<br/>Enter prompt| F
+    F -->|2. HTTP /api/projects| G
+    G -->|3. Route| PS
+    
+    PS -->|4a. Store original| CL
+    PS -->|4b. Publish image-events| R
+    
+    R -->|5. Consume| IA
+    IA -->|6. Check content| GR
+    GR -->|7. If safe| PR
+    
+    PR -->|8a. Text2Image| PX
+    PR -->|8b. Image2Image| OA
+    PR -->|8c. Image2Image| PO
+    
+    PX & OA & PO -->|9. Return image| PR
+    PR -->|10. Upload result| CL
+    PR -->|11. Save job status| DB
+    PR -->|12. Publish processed-image-events| R
+    
+    R -->|13. Consume| NS
+    NS -->|14. WebSocket /api/websocket| G
+    G -->|15. WebSocket| F
+    F -->|16. Display result| U
 ```
-1. User uploads image → Frontend → Projects Service → Cloudinary
 
-2. Projects Service → RabbitMQ → IA Service
+---
 
-3. IA Service → HuggingFace/OpenAI → Gets edited image
+### **5. Content Moderation Flow**
 
-4. IA Service → Cloudinary (save result) + PostgreSQL (save record) + RabbitMQ (notify)
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant IA as IA Service
+    participant G as Guardrails
+    participant AI as AI Provider
 
-5. RabbitMQ → Notifications Service → Frontend → User sees the result
+    U->>IA: Submit prompt for processing
+    IA->>G: check_prompt(prompt)
+    
+    G->>G: Check sexual keywords
+    G->>G: Check violence keywords
+    G->>G: Check hate speech
+    G->>G: Check self-harm
+    
+    alt Any category matched
+        G-->>IA: ContentModerationError
+        IA-->>U: Error: Content blocked by safety filter
+        Note over IA: ErrorCode: CONTENT_MODERATION_VIOLATION
+    else All checks passed
+        G-->>IA: Prompt passed safety check
+        IA->>AI: Call AI provider
+        AI-->>IA: Generated image
+        IA-->>U: Return processed image URL
+    end
+```
+
+---
+
+### **6. RabbitMQ Message Flow Detail**
+
+```mermaid
+flowchart LR
+    subgraph "Exchanges"
+        IE[image-events<br/>Fanout Exchange]
+        PIE[processed-image-events<br/>Fanout Exchange]
+    end
+
+    subgraph "Queues"
+        IPQ[image-processing-events<br/>Queue]
+        PIQ[processed-image-events<br/>Queue]
+    end
+
+    subgraph "Publishers"
+        PS[Projects Service<br/>.NET]
+        IAS[IA Service<br/>Python]
+    end
+
+    subgraph "Consumers"
+        IAC[IA Service<br/>Consumer]
+        NS[Notifications Service<br/>.NET Consumer]
+    end
+
+    %% Flow: Projects Service publishes to image-events
+    PS -->|1. Publish<br/>ImageUploadedEvent| IE
+    IE -->|Bind| IPQ
+    IAC -->|2. Consume| IPQ
+
+    %% Flow: IA Service publishes results to processed-image-events
+    IAS -->|3. Publish<br/>ImageProcessingCompletedEvent| PIE
+    IAS -->|3. Publish<br/>ImageProcessingFailedEvent| PIE
+    PIE -->|Bind| PIQ
+    NS -->|4. Consume| PIQ
+
+    %% Notifications Service also listens to image-events for upload notifications
+    IE -.->|Bind| PIQ
+    NS -.->|Consume image-events| PIQ
+```
+
+**Message Types:**
+
+| Event | Publisher | Consumer | Key Fields |
+|-------|-----------|----------|------------|
+| `ImageUploadedEvent` | Projects Service (.NET) | IA Service (Python) | `ImageId`, `OwnerId`, `Prompt`, `ImageUrl` (optional), `Parameters` |
+| `ImageProcessingCompletedEvent` | IA Service (Python) | Notifications Service (.NET) | `ImageId`, `ProcessedImageUrl`, `ModelUsed`, `ProcessingTimeMs` |
+| `ImageProcessingFailedEvent` | IA Service (Python) | Notifications Service (.NET) | `ImageId`, `ErrorCode`, `ErrorMessage` |
+
+**Error Codes:**
+- `CONTENT_MODERATION_VIOLATION` - Prompt blocked by guardrails
+- `MODEL_NOT_FOUND` - Requested model not available
+- `PROCESSING_ERROR` - AI provider error
+- `UPLOAD_ERROR` - Cloudinary upload failed
+
+---
+
+## **C4 Architecture Diagrams**
+
+### **C1: System Context Diagram**
+
+```mermaid
+flowchart TB
+    subgraph "External Systems"
+        U[User<br/>Content Creator]
+    end
+
+    subgraph "PixPro Platform"
+        PP[PixPro AI Image<br/>Processing System]
+    end
+
+    subgraph "External AI & Storage"
+        OA[OpenAI<br/>gpt-image-1-mini]
+        PA[Pixazo.ai<br/>flux-schnell]
+        PL[Pollinations.ai<br/>kontext]
+        CL[Cloudinary<br/>Image CDN]
+    end
+
+    U -->|Upload images /<br/>Enter prompts| PP
+    PP -->|Process image<br/>editing| OA
+    PP -->|Generate images<br/>from text| PA
+    PP -->|Advanced image<br/>editing| PL
+    PP -->|Store all images| CL
+    CL -->|Serve images| U
+```
+
+---
+
+### **C2: Container Diagram**
+
+```mermaid
+flowchart TB
+    subgraph "User Layer"
+        F[Frontend<br/>Angular App]
+    end
+
+    subgraph "PixPro Platform"
+        G[API Gateway<br/>YARP]
+        PS[Projects Service<br/>.NET]
+        IA[IA Service<br/>Python/FastAPI]
+        NS[Notifications Service<br/>.NET]
+
+        subgraph "IA Service Internals"
+            GR[Guardrails<br/>Content Filter]
+            PR[Processors<br/>AI Integrations]
+        end
+    end
+
+    subgraph "Data Stores"
+        R[(RabbitMQ<br/>Message Broker)]
+        DB[(PostgreSQL<br/>IA Database)]
+        RED[(Redis<br/>Notifications Cache)]
+    end
+
+    subgraph "External AI Providers"
+        PX[Pixazo.ai<br/>Flux Schnell]
+        OA[OpenAI<br/>GPT Image]
+        PO[Pollinations.ai<br/>Kontext]
+    end
+
+    subgraph "External Storage"
+        CL[Cloudinary<br/>Image CDN]
+    end
+
+    %% HTTP Flows
+    F -->|HTTP /api/projects| G
+    F -->|HTTP /api/notifications| G
+    F -->|WebSocket /api/websocket| G
+    G -->|HTTP| PS
+    G -->|HTTP / WebSocket| NS
+
+    %% RabbitMQ Flows - Only Services publish/consume
+    PS -->|Publish image-events| R
+    R -->|Consume image-processing-events| IA
+    IA -->|Publish processed-image-events| R
+    R -->|Consume processed-image-events| NS
+
+    %% WebSocket to Frontend
+    NS -->|WebSocket notification| F
+
+    %% IA Service internal
+    IA -->|Check content| GR
+    IA -->|Route| PR
+
+    %% AI Provider calls
+    PR -->|HTTP POST /flux-1-schnell| PX
+    PR -->|HTTP POST /v1/images/edits| OA
+    PR -->|HTTP POST /v1/images/edits| PO
+
+    %% Storage
+    PR -->|Upload result| CL
+    PS -->|Upload original| CL
+    IA -->|Save job status| DB
+    NS -->|Cache notifications| RED
+```
+
+---
+
+### **C3: Component Diagram - IA Service**
+
+```mermaid
+flowchart TB
+    subgraph "IA Service Container"
+        API[FastAPI<br/>Health Check API]
+
+        subgraph "RabbitMQ Layer"
+            CON[RabbitMQ Consumer<br/>Message Handler]
+            PUB[RabbitMQ Publisher<br/>Event Emitter]
+        end
+
+        subgraph "Business Logic"
+            IP[Image Processor<br/>Orchestrator]
+            GR[Guardrails Service<br/>Content Moderation]
+            MR[Model Router<br/>Tier Selection]
+        end
+
+        subgraph "AI Processors"
+            PP[Pixazo Processor<br/>Flux Schnell]
+            OP[OpenAI Processor<br/>gpt-image-1-mini]
+            POL[Pollinations Processor<br/>kontext]
+        end
+
+        subgraph "Infrastructure"
+            DB[(PostgreSQL<br/>Job Repository)]
+            CL[Cloudinary Client<br/>Image Storage]
+        end
+    end
+
+    subgraph "External"
+        R[(RabbitMQ)]
+        PX[Pixazo.ai API]
+        OA[OpenAI API]
+        PO[Pollinations API]
+    end
+
+    R -->|Consume| CON
+    CON -->|Validate & Route| IP
+    IP -->|Check prompt| GR
+    GR -->|Pass/Fail| IP
+    IP -->|Select model| MR
+    MR -->|Route| PP
+    MR -->|Route| OP
+    MR -->|Route| POL
+
+    PP -->|HTTP| PX
+    OP -->|HTTP| OA
+    POL -->|HTTP| PO
+
+    PP & OP & POL -->|Bytes| CL
+    CL -->|URL| IP
+    IP -->|Save status| DB
+    IP -->|Publish event| PUB
+    PUB -->|Publish| R
+
+    API -.->|Health check| DB
+    API -.->|Health check| R
+```
+
+---
+
+### **C4: Code Diagram - Image Processing Flow**
+
+```mermaid
+flowchart TD
+    subgraph "Entry Point"
+        ON_MSG[_on_message<br/>message: bytes]
+        PROC_EVT[_process_event<br/>event: ImageUploadedEvent]
+    end
+
+    subgraph "Processing Decision"
+        CHECK{Guardrails.<br/>check_prompt}
+        HAS_IMG{Has<br/>ImageUrl?}
+    end
+
+    subgraph "Text-to-Image Path"
+        T2I[PixazoProcessor.<br/>process]
+        T2I_API[POST /flux-1-schnell]
+        T2I_DL[Download from<br/>output URL]
+    end
+
+    subgraph "Image-to-Image Path"
+        I2I_DL[Download<br/>original image]
+        I2I[Processor.<br/>process]
+    end
+
+    subgraph "Completion"
+        UP[Cloudinary.<br/>upload_image]
+        SAVE[Database.<br/>update_job]
+        PUB[RabbitMQ.<br/>publish_completed]
+    end
+
+    ON_MSG -->|decode & validate| PROC_EVT
+    PROC_EVT --> CHECK
+
+    CHECK -->|Fail| ERR[Publish<br/>ImageProcessingFailedEvent]
+    CHECK -->|Pass| HAS_IMG
+
+    HAS_IMG -->|No| T2I
+    T2I --> T2I_API
+    T2I_API -->|JSON {output}| T2I_DL
+    T2I_DL --> UP
+
+    HAS_IMG -->|Yes| I2I_DL
+    I2I_DL --> I2I
+    I2I --> UP
+
+    UP --> SAVE
+    SAVE --> PUB
 ```
 
 ---
@@ -235,18 +655,26 @@ Putting it all together:
 ### **Components Overview**
 
 **PixPro Platform (our system):**
-- **Frontend** - React web app where users interact
-- **Gateway** - Routes all requests to the right service
-- **Projects Service** - Handles image uploads
-- **IA Service** - Runs the AI image editing
-- **Notifications Service** - Sends real-time updates
-- **IA Database** - PostgreSQL storing processing jobs
 
-**External Systems:**
-- **Cloudinary** - Stores all images (original and edited)
-- **RabbitMQ** - Message broker connecting services
-- **HuggingFace** - Provides AI models (SD, FLUX)
-- **OpenAI** - Provides GPT Image model
+| Component | Technology | Responsibility |
+|-----------|------------|----------------|
+| **Frontend** | Angular | Web app where users upload images and enter prompts |
+| **Gateway** | YARP (Yet Another Reverse Proxy) | Routes HTTP requests and WebSocket connections |
+| **Projects Service** | .NET | Handles image uploads, stores to Cloudinary, publishes to RabbitMQ |
+| **IA Service** | Python/FastAPI | Consumes events, runs AI processing with guardrails |
+| **Guardrails** | Python | Content safety filtering before AI processing |
+| **Notifications Service** | .NET | Consumes completion events, sends WebSocket notifications |
+| **IA Database** | PostgreSQL | Stores processing job records and status |
+| **Notifications Cache** | Redis | Caches notifications for fast retrieval |
+
+**External AI Providers:**
+- **Pixazo.ai** - Flux Schnell for text-to-image ($0.0012/img)
+- **OpenAI** - GPT Image 1 Mini for image editing ($0.011-$0.167/img)
+- **Pollinations.ai** - FLUX.1 Kontext for image editing ($0.04/img)
+
+**Infrastructure:**
+- **Cloudinary** - Stores all images (original and generated)
+- **RabbitMQ** - Message broker connecting services (Fanout exchanges: `image-events`, `processed-image-events`)
 
 ---
 
@@ -260,56 +688,110 @@ When sending an image for processing, you can customize the AI behavior with the
 |-----------|------|-------|---------|-------------|
 | `width` | int | 64-2048 | 512 | Output image width in pixels |
 | `height` | int | 64-2048 | 512 | Output image height in pixels |
-| `num_inference_steps` | int | 1-100 | 20 | AI refinement steps. Higher = better quality but slower |
-| `strength` | float | 0.0-1.0 | 0.75 | How much AI can change the original image. 0.2 = subtle, 1.0 = complete transformation |
-| `guidance_scale` | float | 1.0-20.0 | 7.5 | How closely AI follows the prompt. Higher = more literal |
+| `num_inference_steps` | int | 1-100 | 20 | AI refinement steps (Pixazo uses fixed 4 steps) |
+| `strength` | float | 0.0-1.0 | 0.75 | How much AI can change the original image (image-to-image only) |
+| `guidance_scale` | float | 1.0-20.0 | 7.5 | How closely AI follows the prompt (Pollinations only) |
 | `quantity` | int | 1-10 | 1 | Number of image variations to generate |
-| `model` | string | - | `stable-diffusion-v1-5` | AI model to use. Options: `stable-diffusion-v1-5`, `flux-2-dev`, `flux-1-kontext-dev` |
+| `model` | string | - | `gpt-image-1-mini-low` | AI model to use. Options: `flux-schnell`, `gpt-image-1-mini-low`, `kontext`, `gpt-image-1-mini-high` |
 
 ### **Usage Examples**
 
-**Subtle style change (keep original composition):**
+**Text-to-Image (Budget Tier - Cheapest at $0.0012/img):**
 ```json
 {
+  "ImageId": "uuid-here",
+  "OwnerId": "user-uuid",
+  "Prompt": "A majestic dragon flying over a medieval castle at sunset",
+  "Parameters": {
+    "width": 512,
+    "height": 512,
+    "quantity": 1,
+    "model": "flux-schnell"
+  }
+}
+```
+*Note: No `ImageUrl` required for text-to-image generation*
+
+**Image-to-Image subtle edit (Default Tier):**
+```json
+{
+  "ImageId": "uuid-here",
+  "OwnerId": "user-uuid",
+  "ImageUrl": "https://cloudinary.com/original.jpg",
   "Prompt": "Make this look like a watercolor painting",
   "Parameters": {
     "width": 512,
     "height": 512,
     "strength": 0.3,
-    "num_inference_steps": 20,
-    "model": "stable-diffusion-v1-5"
+    "quantity": 1,
+    "model": "gpt-image-1-mini-low"
   }
 }
 ```
 
-**Creative transformation:**
+**Image-to-Image creative transformation (Standard Tier):**
 ```json
 {
+  "ImageId": "uuid-here",
+  "OwnerId": "user-uuid",
+  "ImageUrl": "https://cloudinary.com/original.jpg",
   "Prompt": "Transform into cyberpunk city at night, neon lights, futuristic",
   "Parameters": {
     "width": 768,
     "height": 512,
     "strength": 0.85,
     "guidance_scale": 12,
-    "num_inference_steps": 50,
-    "model": "flux-2-dev"
+    "quantity": 1,
+    "model": "kontext"
   }
 }
 ```
 
-**Generate multiple options:**
+**Premium quality edit (AI Reasoning Tier):**
 ```json
 {
+  "ImageId": "uuid-here",
+  "OwnerId": "user-uuid",
+  "ImageUrl": "https://cloudinary.com/original.jpg",
+  "Prompt": "Add intricate details, professional photography lighting, 8K quality",
+  "Parameters": {
+    "width": 1024,
+    "height": 1024,
+    "strength": 0.5,
+    "quantity": 1,
+    "model": "gpt-image-1-mini-high"
+  }
+}
+```
+
+**Generate multiple variations:**
+```json
+{
+  "ImageId": "uuid-here",
+  "OwnerId": "user-uuid",
+  "ImageUrl": "https://cloudinary.com/original.jpg",
   "Prompt": "Portrait with different artistic styles",
   "Parameters": {
     "width": 512,
     "height": 768,
     "quantity": 4,
-    "num_inference_steps": 30,
-    "model": "stable-diffusion-v1-5"
+    "model": "gpt-image-1-mini-low"
   }
 }
 ```
+
+**Content that will be blocked by Guardrails:**
+```json
+{
+  "ImageId": "uuid-here",
+  "OwnerId": "user-uuid",
+  "Prompt": "Generate a violent scene with blood and weapons",
+  "Parameters": {
+    "model": "flux-schnell"
+  }
+}
+```
+*Result: Error `CONTENT_MODERATION_VIOLATION`*
 
 ### **Visual Guide: Strength Parameter**
 
@@ -326,11 +808,12 @@ strength=0.2          strength=0.5          strength=0.9
 
 ### **Model Selection Tips**
 
-| Model | Best For | Cost | Quality |
-|-------|----------|------|---------|
-| `stable-diffusion-v1-5` | High volume, quick edits | ⭐ Cheapest | ⭐⭐⭐⭐ |
-| `flux-2-dev` | Quality generation + editing | 💰 Medium | ⭐⭐⭐⭐⭐ |
-| `flux-1-kontext-dev` | Consistent character editing | 💰 Higher | ⭐⭐⭐⭐⭐ |
+| Model | Best For | Task | Cost | Quality |
+|-------|----------|------|------|---------|
+| `flux-schnell` | Text-to-image generation | Text → Image | ⭐⭐⭐⭐⭐ Cheapest | ⭐⭐⭐⭐ |
+| `gpt-image-1-mini-low` | Everyday image editing | Image → Image | ⭐ Cheapest | ⭐⭐⭐⭐ |
+| `kontext` | High-quality instruction editing | Image → Image | 💰💰 Medium | ⭐⭐⭐⭐⭐ |
+| `gpt-image-1-mini-high` | Complex reasoning edits | Image → Image | 💰💰💰 Premium | ⭐⭐⭐⭐⭐ |
 
 ---
 
