@@ -8,6 +8,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/Services/IA/app ./app
 
-EXPOSE 5004
+EXPOSE 8084
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "5004"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8084"]

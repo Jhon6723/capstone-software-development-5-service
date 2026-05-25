@@ -75,7 +75,7 @@ services:
       context: .
       dockerfile: src/Services/IA/Dockerfile
     expose:
-      - "5004"
+      - "8084"
     networks:
       - pixpro_net
     environment:
@@ -83,9 +83,18 @@ services:
       - RabbitMQ__Host=rabbitmq
       - RabbitMQ__Username=${RABBITMQ_USER}
       - RabbitMQ__Password=${RABBITMQ_PASSWORD}
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - POLLINATIONS_API_KEY=${POLLINATIONS_API_KEY}
+      - POLLINATIONS_ENDPOINT=${POLLINATIONS_ENDPOINT}
+      - PIXAZO_API_KEY=${PIXAZO_API_KEY}
     depends_on:
-      - rabbitmq
-      - ia-db
+      rabbitmq:
+        condition: service_healthy
+      ia-db:
+        condition: service_started
 
   ia-db:
     image: postgres:16-alpine
@@ -143,6 +152,12 @@ services:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - pixpro_net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   db:
     image: postgres:16-alpine

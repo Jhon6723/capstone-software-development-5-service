@@ -4,3 +4,10 @@ fastapi==0.115.12
 uvicorn==0.34.3
 python-dotenv==1.1.0
 requests==2.32.3
+sqlalchemy==2.0.40
+psycopg2-binary==2.9.10
+alembic==1.15.2
+cloudinary==1.42.2
+openai==1.78.0
+pillow==11.2.1
+aio-pika==9.5.5
