@@ -19,7 +19,7 @@ dotnet test tests/PixPro.Projects.UnitTests --collect:"XPlat Code Coverage" --re
 echo ""
 echo "Generando reporte"
 
-~/.dotnet/tools/reportgenerator -reports:"tests/TestResults/**/coverage.cobertura.xml" -targetdir:"coveragereport" -reporttypes:"Html;HtmlSummary;Xml;SonarQube" -verbosity:Warning
+~/.dotnet/tools/reportgenerator -reports:"tests/TestResults/**/coverage.cobertura.xml" -targetdir:"coveragereport" -reporttypes:"Html;HtmlSummary;Xml;SonarQube" -verbosity:Warning -assemblyfilters:"-Infrastructure"
 
 echo ""
 echo "Ubicación: coveragereport/index.html"
