@@ -38,6 +38,7 @@ ch.exchange_declare(exchange="image-events", exchange_type="fanout", durable=Tru
 #   "Prompt": "Add a moon in the sky",
 #   "Parameters": {"width": 512, "height": 512, "strength": 0.75, "model": "kontext"}
 # === OPCIÓN 1: Generación de imágenes (Text-to-Image) ===
+# Feature: 0 = Generator (text-to-image)
 # Modelos: "flux-schnell" (Pixazo, más barato ~$0.0012/imagen)
 # NO requiere ImageUrl
 msgGenerator: JsonDict = {
@@ -45,6 +46,7 @@ msgGenerator: JsonDict = {
     "OwnerId": "a1d4e7c2-3f8b-4a9d-b5e6-2c7f1a0d9e3b",
     # Sin ImageUrl para text-to-image
     "Prompt": "Un pulpo gigante hecho de vitrales flotando sobre una catedral medieval",
+    "Feature": 0,  # Generator
     "Parameters": {
         "width": 512,
         "height": 512,
@@ -55,6 +57,7 @@ msgGenerator: JsonDict = {
 }
 
 # === OPCIÓN 2: Edición de imágenes (Image-to-Image) ===
+# Feature: 1 = Editor (image-to-image)
 # Modelos: "gpt-image-1-mini-low", "kontext", "gpt-image-1-mini-high"
 # REQUIERE ImageUrl
 msgEditor: JsonDict = {
@@ -62,6 +65,7 @@ msgEditor: JsonDict = {
     "OwnerId": "a1d4e7c2-3f8b-4a9d-b5e6-2c7f1a0d9e3b",
     "ImageUrl": "https://res.cloudinary.com/estebancamacho-jalau/image/upload/v1779714739/processed_images/processed_pixazo_1779714738_0.jpg",
     "Prompt": "Añade una cara al pulpo",
+    "Feature": 1,  # Editor
     "Parameters": {
         "width": 512,
         "height": 512,
@@ -87,4 +91,5 @@ print("ImageUploadedEvent published to 'image-events' exchange!")
 #print(f"OwnerId: {msgEditor['OwnerId']}")
 #print(f"ImageUrl: {msgEditor.get('ImageUrl', 'N/A (text-to-image)')}")
 print(f"Prompt: {msgEditor['Prompt']}")
+print(f"Feature: {msgEditor['Feature']} (0=Generator, 1=Editor)")
 print(f"Model: {msgEditor['Parameters']['model']}")  # type: ignore[index]

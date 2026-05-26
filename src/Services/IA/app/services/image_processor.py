@@ -6,7 +6,7 @@ from app.processors.openai_processor import OpenAIProcessor
 from app.processors.pollinations import PollinationsProcessor
 from app.processors.pixazo import PixazoProcessor
 from app.processors.mock import MockImageProcessor
-from app.models.events import ProcessingParameters, ProcessingResult, ImageUploadedEvent
+from app.models.events import ProcessingParameters, ProcessingResult, ImageUploadedEvent, ProcessingFeature
 from app.services.cloudinary_service import CloudinaryService
 from app.services.guardrails import Guardrails, ContentModerationError, get_guardrails
 
@@ -64,11 +64,25 @@ class ImageProcessingService:
         # Get parameters with defaults
         parameters = event.Parameters or ProcessingParameters()
         
-        # Determine which model to use
-        if event.Parameters and event.Parameters.model:
-            model = event.Parameters.model
+        # Determine which model to use based on Feature
+        # Feature 0 (GENERATOR) = text-to-image -> ALWAYS use flux-schnell (Pixazo)
+        # Feature 1 (EDITOR) = image-to-image -> REQUIRES explicit model in parameters
+        if event.Feature == ProcessingFeature.GENERATOR:
+            # Text-to-image: force Pixazo (flux-schnell) - cheapest, fastest, no source image needed
+            model = ModelTier.PIXAZO.value
+            logger.info(f"Feature=GENERATOR detected - forcing model: {model} (text-to-image)")
+        elif event.Feature == ProcessingFeature.EDITOR:
+            # Image-to-image: model is REQUIRED
+            if event.Parameters and event.Parameters.model:
+                model = event.Parameters.model
+                logger.info(f"Feature=EDITOR detected - using specified model: {model}")
+            else:
+                raise ValueError("Feature=EDITOR requires explicit 'model' in Parameters. "
+                               "Valid models: gpt-image-1-mini-low, gpt-image-1-mini-high, kontext")
         else:
+            # Fallback for unknown feature values
             model = ModelTier.DEFAULT.value
+            logger.warning(f"Unknown Feature value {event.Feature}, using default model: {model}")
         
         # Check content safety before processing
         try:

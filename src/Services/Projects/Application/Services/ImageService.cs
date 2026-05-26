@@ -47,76 +47,108 @@ public class ImageService : IImageService
         try
         {
             var file = request.File;
+            string? imageUrl = null;
+            Image? image = null;
 
-            if (file is null || file.Length == 0)
-                return Result<ImageUploadResponse>.Failure("No file provided.");
+            // Handle file upload if provided (image-to-image)
+            if (file is not null && file.Length > 0)
+            {
+                if (file.Length > MaxFileSizeBytes)
+                    return Result<ImageUploadResponse>.Failure("File exceeds the 5 MB size limit.");
 
-            if (file.Length > MaxFileSizeBytes)
-                return Result<ImageUploadResponse>.Failure("File exceeds the 5 MB size limit.");
+                var extension = Path.GetExtension(file.FileName);
+                if (!AllowedExtensions.Contains(extension))
+                    return Result<ImageUploadResponse>.Failure(
+                        $"Extension '{extension}' is not allowed. Use: .jpg, .jpeg, .png, .webp");
 
-            var extension = Path.GetExtension(file.FileName);
-            if (!AllowedExtensions.Contains(extension))
-                return Result<ImageUploadResponse>.Failure(
-                    $"Extension '{extension}' is not allowed. Use: .jpg, .jpeg, .png, .webp");
+                if (!AllowedContentTypes.Contains(file.ContentType))
+                    return Result<ImageUploadResponse>.Failure(
+                        $"Content-Type '{file.ContentType}' is not allowed.");
 
-            if (!AllowedContentTypes.Contains(file.ContentType))
-                return Result<ImageUploadResponse>.Failure(
-                    $"Content-Type '{file.ContentType}' is not allowed.");
+                using var stream = file.OpenReadStream();
 
-            using var stream = file.OpenReadStream();
+                var uploaded = await _storageService.UploadAsync(
+                    stream,
+                    file.FileName,
+                    file.ContentType,
+                    cancellationToken);
 
-            var uploaded = await _storageService.UploadAsync(
-                stream,
-                file.FileName,
-                file.ContentType,
-                cancellationToken);
+                image = Image.CreateFromCloudinary(
+                    file.FileName,
+                    file.ContentType,
+                    uploaded.PublicId,
+                    uploaded.Url,
+                    uploaded.SecureUrl,
+                    uploaded.Format,
+                    uploaded.Bytes,
+                    uploaded.Width,
+                    uploaded.Height,
+                    request.OwnerId);
 
-            var image = Image.CreateFromCloudinary(
-                file.FileName,
-                file.ContentType,
-                uploaded.PublicId,
-                uploaded.Url,
-                uploaded.SecureUrl,
-                uploaded.Format,
-                uploaded.Bytes,
-                uploaded.Width,
-                uploaded.Height,
-                request.OwnerId);
+                await _imageRepository.AddAsync(image, cancellationToken);
+                await _imageRepository.SaveChangesAsync(cancellationToken);
 
-            await _imageRepository.AddAsync(image, cancellationToken);
-            await _imageRepository.SaveChangesAsync(cancellationToken);
+                imageUrl = image.SecureUrl;
 
-            _logger.LogInformation("Image uploaded: {ImageId} by Owner: {OwnerId}", image.Id, request.OwnerId);
+                _logger.LogInformation("Image uploaded: {ImageId} by Owner: {OwnerId}", image.Id, request.OwnerId);
+            }
+
+            // Generate a new ImageId for text-to-image if no file was uploaded
+            var imageId = image?.Id ?? Guid.NewGuid();
+
+            // Use provided feature or auto-detect based on file presence
+            var feature = request.Feature ?? (file != null ? ProcessingFeature.Editor : ProcessingFeature.Generator);
+
+            var featureName = feature == ProcessingFeature.Generator ? "Generator" : "Editor";
+            _logger.LogInformation(
+                "Processing {ProcessingType} for Owner: {OwnerId}, Feature: {FeatureName}",
+                file != null ? "image-to-image" : "text-to-image",
+                request.OwnerId,
+                featureName);
 
             try
             {
+                var integrationEvent = new ImageUploadedEvent(
+                    imageId,
+                    request.OwnerId,
+                    imageUrl,
+                    request.Prompt,
+                    feature,
+                    request.Parameters);
+
                 await _messagePublisher.PublishAsync(
-                    new ImageUploadedEvent(image.Id, request.OwnerId, image.SecureUrl),
+                    integrationEvent,
                     "image-processing-events",
                     cancellationToken);
 
-                _logger.LogInformation("ImageUploadedEvent published for ImageId: {ImageId}", image.Id);
+                _logger.LogInformation(
+                    "ImageUploadedEvent published for ImageId: {ImageId}, Type: {ProcessingType}",
+                    imageId,
+                    file != null ? "image-to-image" : "text-to-image");
             }
             catch (Exception pubEx)
             {
-                _logger.LogWarning(pubEx, "failed to publish ImageUploadedEvent for ImageId: {ImageId}. Image was saved successfully", image.Id);
+                _logger.LogWarning(pubEx,
+                    "Failed to publish ImageUploadedEvent for ImageId: {ImageId}. Request was processed successfully",
+                    imageId);
             }
 
             return Result<ImageUploadResponse>.Success(new ImageUploadResponse(
-                image.Id,
-                image.FileName,
-                image.FilePath,
-                image.SecureUrl,
-                image.Format,
-                image.SizeInBytes,
-                image.Width,
-                image.Height,
-                image.CreatedAt));
+                imageId,
+                image?.FileName ?? "",
+                image?.FilePath ?? "",
+                image?.SecureUrl ?? "",
+                image?.Format ?? "",
+                image?.SizeInBytes ?? 0,
+                image?.Width ?? 0,
+                image?.Height ?? 0,
+                image?.CreatedAt ?? DateTimeOffset.UtcNow,
+                feature));
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error uploading image for Owner: {OwnerId}", request.OwnerId);
-            return Result<ImageUploadResponse>.Failure($"Error uploading image: {ex.Message}");
+            _logger.LogError(ex, "Error processing image request for Owner: {OwnerId}", request.OwnerId);
+            return Result<ImageUploadResponse>.Failure($"Error processing image request: {ex.Message}");
         }
     }
 }

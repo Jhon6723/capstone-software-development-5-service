@@ -5,15 +5,57 @@ using Microsoft.AspNetCore.Http;
 namespace API.Models;
 
 /// <summary>
-/// Request model for uploading an image
+/// AI processing feature type
+/// </summary>
+public enum ProcessingFeature
+{
+    /// <summary>
+    /// Text-to-image generation (no source image required)
+    /// </summary>
+    Generator = 0,
+
+    /// <summary>
+    /// Image-to-image editing (requires source image)
+    /// </summary>
+    Editor = 1
+}
+
+/// <summary>
+/// Request model for uploading an image or generating from text
 /// </summary>
 public class UploadImageRequest
 {
     /// <summary>
-    /// Image file to upload (max 10MB)
+    /// Image file to upload (optional for text-to-image, required for image-to-image)
+    /// Max 10MB. Accepted formats: .jpg, .jpeg, .png, .webp
     /// </summary>
+    public IFormFile? File { get; set; }
+
+    /// <summary>
+    /// Text prompt describing the desired image or transformation (required)
+    /// </summary>
+    /// <example>Transform this image into a cyberpunk style with neon lights</example>
     [Required]
-    public required IFormFile File { get; set; }
+    public string Prompt { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Processing feature: 0=Generator (text-to-image), 1=Editor (image-to-image)
+    /// Auto-detected if not specified (based on file presence)
+    /// </summary>
+    /// <example>0</example>
+    [DefaultValue(0)]
+    public int? Feature { get; set; }
+
+    /// <summary>
+    /// Processing parameters as JSON string (optional for Generator, required for Editor)
+    /// </summary>
+    /// <remarks>
+    /// <b>Generator mode (Feature=0):</b> Optional. Only basic parameters like width/height used.
+    /// <b>Editor mode (Feature=1):</b> Required. Must include 'model' field.
+    /// </remarks>
+    /// <example>Generator: {"width": 512, "height": 512, "quantity": 1}</example>
+    /// <example>Editor: {"width": 512, "height": 512, "model": "gpt-image-1-mini-low", "strength": 0.75}</example>
+    public string? Parameters { get; set; }
 }
 
 /// <summary>
@@ -66,14 +108,60 @@ public class UpdateImageRequest
 }
 
 /// <summary>
-/// Image information
+/// Image upload response
 /// </summary>
 public class ImageResponse
 {
     /// <summary>
     /// Image unique identifier
     /// </summary>
-    public required string ImageId { get; set; }
+    public string ImageId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Original file name
+    /// </summary>
+    public string FileName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// URL to access the image
+    /// </summary>
+    public string Url { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Secure HTTPS URL to the image
+    /// </summary>
+    public string SecureUrl { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Image format (jpg, png, webp, etc.)
+    /// </summary>
+    public string Format { get; set; } = string.Empty;
+
+    /// <summary>
+    /// File size in bytes
+    /// </summary>
+    public long SizeInBytes { get; set; }
+
+    /// <summary>
+    /// Image width in pixels
+    /// </summary>
+    public int Width { get; set; }
+
+    /// <summary>
+    /// Image height in pixels
+    /// </summary>
+    public int Height { get; set; }
+
+    /// <summary>
+    /// Upload timestamp
+    /// </summary>
+    public DateTimeOffset UploadedAt { get; set; }
+
+    /// <summary>
+    /// Processing feature used: 0=Generator (text-to-image), 1=Editor (image-to-image)
+    /// </summary>
+    /// <example>0</example>
+    public int Feature { get; set; }
 }
 
 /// <summary>

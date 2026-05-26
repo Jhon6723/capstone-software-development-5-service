@@ -1,3 +1,5 @@
+using PixPro.Services.Projects.Application.IntegrationEvents;
+
 namespace PixPro.Services.Projects.Application.DTOs.Responses;
 
 public record ImageUploadResponse(
@@ -9,5 +11,6 @@ public record ImageUploadResponse(
     long SizeInBytes,
     int Width,
     int Height,
-    DateTimeOffset UploadedAt
+    DateTimeOffset UploadedAt,
+    ProcessingFeature Feature
 );
