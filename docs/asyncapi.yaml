@@ -1,0 +1,687 @@
+asyncapi: 3.1.0
+id: 'urn:pixpro:asyncapi:1.0.0'
+info:
+  title: PixPro Async API
+  version: 1.0.0
+  description: >
+    API asíncrona para PixPro - incluye WebSockets para notificaciones en tiempo
+    real
+
+    y RabbitMQ para eventos de procesamiento de imágenes.
+  contact:
+    name: PixPro Team
+    url: 'https://pixpro.com'
+    email: support@pixpro.com
+  license:
+    name: Proprietary
+  tags:
+    - name: WebSocket
+      description: Notificaciones en tiempo real vía WebSocket
+    - name: ImageProcessing
+      description: Eventos de procesamiento de imágenes con IA
+    - name: Notifications
+      description: Eventos de dominio del servicio de notificaciones
+    - name: UserProject
+      description: Eventos de usuarios y proyectos
+defaultContentType: application/json
+servers:
+  websocket-notifications:
+    host: api.pixpro.com
+    protocol: wss
+    description: |
+      Servidor WebSocket para notificaciones push en tiempo real.
+      Requiere JWT token en query string: ?access_token={jwt}
+    security:
+      - $ref: '#/components/securitySchemes/bearerAuth'
+  rabbitmq-broker:
+    host: 'rabbitmq.pixpro.com:5672'
+    protocol: amqp
+    description: |
+      RabbitMQ broker para eventos de integración entre microservicios.
+      Usa exchanges fanout y topic para routing de eventos.
+    security:
+      - $ref: '#/components/securitySchemes/rabbitmqAuth'
+channels:
+  notifications/realtime:
+    address: notifications/realtime
+    messages:
+      ClientPingMessage:
+        contentType: application/json
+        payload:
+          type: object
+          properties:
+            type:
+              type: string
+              enum:
+                - ping
+              description: Tipo de mensaje del cliente (solo ping soportado)
+            timestamp:
+              type: string
+              format: date-time
+              description: Timestamp ISO 8601
+      NotificationMessage:
+        $ref: '#/components/messages/NotificationMessage'
+    description: |
+      Canal WebSocket para recibir notificaciones push en tiempo real.
+      El cliente se conecta y recibe eventos de notificación.
+    servers:
+      - $ref: '#/servers/websocket-notifications'
+  image/processing:
+    address: image/processing
+    messages:
+      ImageProcessingCompletedEvent:
+        $ref: '#/components/messages/ImageProcessingCompletedEvent'
+      ImageProcessingFailedEvent:
+        $ref: '#/components/messages/ImageProcessingFailedEvent'
+      ImageUploadedEvent:
+        $ref: '#/components/messages/ImageUploadedEvent'
+    description: |
+      Canal para eventos de procesamiento de imágenes con IA.
+      Cola image-processing-events enlazada al exchange fanout image-events.
+      Publicación de resultados vía exchange fanout processed-image-events.
+    servers:
+      - $ref: '#/servers/rabbitmq-broker'
+    bindings:
+      amqp:
+        is: queue
+        queue:
+          name: image-processing-events
+          durable: true
+        bindingVersion: '0.3.0'
+  notification/domain-events:
+    address: notification/domain-events
+    messages:
+      NotificationCreatedEvent:
+        $ref: '#/components/messages/NotificationCreatedDomainMessage'
+      NotificationReadEvent:
+        $ref: '#/components/messages/NotificationReadDomainMessage'
+      NotificationBatchReadEvent:
+        $ref: '#/components/messages/NotificationBatchReadDomainMessage'
+      NotificationDeletedEvent:
+        $ref: '#/components/messages/NotificationDeletedDomainMessage'
+    description: |
+      Canal para eventos de dominio del servicio de notificaciones.
+      Exchange topic notification-domain-events, routing key notification.*.
+    servers:
+      - $ref: '#/servers/rabbitmq-broker'
+    bindings:
+      amqp:
+        is: queue
+        queue:
+          name: notification-domain-events
+          durable: true
+        bindingVersion: '0.3.0'
+  user/events:
+    address: user/events
+    messages:
+      UserRegisteredEvent:
+        $ref: '#/components/messages/UserRegisteredEvent'
+    description: |
+      Canal para eventos de registro de usuarios que generan notificaciones.
+      Queue: user-events (independiente de project-events).
+    servers:
+      - $ref: '#/servers/rabbitmq-broker'
+    bindings:
+      amqp:
+        is: queue
+        queue:
+          name: user-events
+          durable: true
+        bindingVersion: '0.3.0'
+  project/events:
+    address: project/events
+    messages:
+      ProjectCreatedEvent:
+        $ref: '#/components/messages/ProjectCreatedEvent'
+      ProjectUpdatedEvent:
+        $ref: '#/components/messages/ProjectUpdatedEvent'
+      ProjectAssignedEvent:
+        $ref: '#/components/messages/ProjectAssignedEvent'
+    description: |
+      Canal para eventos de proyectos que generan notificaciones.
+      Queue: project-events (independiente de user-events).
+    servers:
+      - $ref: '#/servers/rabbitmq-broker'
+    bindings:
+      amqp:
+        is: queue
+        queue:
+          name: project-events
+          durable: true
+        bindingVersion: '0.3.0'
+  notification/direct:
+    address: notification/direct
+    messages:
+      DirectNotificationEvent:
+        $ref: '#/components/messages/DirectNotificationEvent'
+    description: |
+      Canal para crear notificaciones directamente vía RabbitMQ.
+      Queue: notifications.
+    servers:
+      - $ref: '#/servers/rabbitmq-broker'
+    bindings:
+      amqp:
+        is: queue
+        queue:
+          name: notifications
+          durable: true
+        bindingVersion: '0.3.0'
+operations:
+  sendClientPing:
+    action: receive
+    channel:
+      $ref: '#/channels/notifications~1realtime'
+    summary: Enviar mensajes al servidor
+    description: |
+      El cliente puede enviar mensajes al servidor (ping, etc.)
+      Todos los mensajes deben ser JSON válido.
+    messages:
+      - $ref: '#/channels/notifications~1realtime/messages/ClientPingMessage'
+  receiveNotificationRealtime:
+    action: send
+    channel:
+      $ref: '#/channels/notifications~1realtime'
+    summary: Recibir notificaciones del servidor
+    description: El servidor envía notificaciones al cliente conectado
+    messages:
+      - $ref: '#/channels/notifications~1realtime/messages/NotificationMessage'
+  publishImageProcessingResult:
+    action: receive
+    channel:
+      $ref: '#/channels/image~1processing'
+    summary: Publicar eventos de imagen completada/fallida
+    description: |
+      IA Service publica resultados del procesamiento.
+      Exchange: processed-image-events (fanout, durable).
+    messages:
+      - $ref: '#/channels/image~1processing/messages/ImageProcessingCompletedEvent'
+      - $ref: '#/channels/image~1processing/messages/ImageProcessingFailedEvent'
+  consumeImageUploaded:
+    action: send
+    channel:
+      $ref: '#/channels/image~1processing'
+    summary: Consumir eventos de imagen subida
+    description: |
+      IA Service consume eventos ImageUploadedEvent para procesar imágenes.
+      Exchange origen: image-events (fanout, durable).
+    messages:
+      - $ref: '#/channels/image~1processing/messages/ImageUploadedEvent'
+  publishNotificationDomainEvent:
+    action: receive
+    channel:
+      $ref: '#/channels/notification~1domain-events'
+    summary: Publicar eventos de dominio
+    description: >
+      Servicio de notificaciones publica eventos cuando ocurren cambios.
+
+      Exchange: notification-domain-events (topic, durable).
+
+      Routing key: notification.{eventType}
+
+      Tipos: NotificationCreatedEvent, NotificationReadEvent,
+      NotificationBatchReadEvent, NotificationDeletedEvent.
+  syncNotificationReadDb:
+    action: send
+    channel:
+      $ref: '#/channels/notification~1domain-events'
+    summary: Sincronización CQRS - Replica Read DB
+    description: |
+      Consumer sincroniza base de datos de lectura con eventos de dominio.
+      Queue: notification-domain-events, routing key: notification.*
+    messages:
+      - $ref: >-
+          #/channels/notification~1domain-events/messages/NotificationCreatedEvent
+      - $ref: '#/channels/notification~1domain-events/messages/NotificationReadEvent'
+      - $ref: >-
+          #/channels/notification~1domain-events/messages/NotificationBatchReadEvent
+      - $ref: >-
+          #/channels/notification~1domain-events/messages/NotificationDeletedEvent
+  consumeUserRegistered:
+    action: send
+    channel:
+      $ref: '#/channels/user~1events'
+    summary: Consumir eventos de usuario registrado
+    description: >
+      Notifications Service consume estos eventos para crear notificaciones de
+      bienvenida.
+    messages:
+      - $ref: '#/channels/user~1events/messages/UserRegisteredEvent'
+  consumeProjectEvents:
+    action: send
+    channel:
+      $ref: '#/channels/project~1events'
+    summary: Consumir eventos de proyecto
+    description: >
+      Notifications Service consume estos eventos para crear notificaciones
+      automáticas.
+    messages:
+      - $ref: '#/channels/project~1events/messages/ProjectCreatedEvent'
+      - $ref: '#/channels/project~1events/messages/ProjectUpdatedEvent'
+      - $ref: '#/channels/project~1events/messages/ProjectAssignedEvent'
+  consumeDirectNotification:
+    action: send
+    channel:
+      $ref: '#/channels/notification~1direct'
+    summary: Consumir notificaciones directas
+    description: >
+      Notifications Service consume mensajes para crear notificaciones
+      directamente.
+    messages:
+      - $ref: '#/channels/notification~1direct/messages/DirectNotificationEvent'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT token para autenticación. En WebSockets se envía vía query string:
+        wss://api.pixpro.com/api/websocket/connect?access_token={jwt}
+
+        El token debe contener claims: sub (userId), email, name.
+    rabbitmqAuth:
+      type: userPassword
+      description: >
+        Credenciales de RabbitMQ (username/password).
+
+        Configuradas en variables de entorno RabbitMQ__Username y
+        RabbitMQ__Password.
+  messages:
+    NotificationMessage:
+      name: NotificationMessage
+      title: Notificación Push
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/NotificationEvent'
+    ImageUploadedEvent:
+      name: ImageUploadedEvent
+      title: Imagen Subida para Procesamiento
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ImageUploadedEvent'
+    ImageProcessingCompletedEvent:
+      name: ImageProcessingCompletedEvent
+      title: Procesamiento de Imagen Completado
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ImageProcessingCompletedEvent'
+    ImageProcessingFailedEvent:
+      name: ImageProcessingFailedEvent
+      title: Procesamiento de Imagen Fallido
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ImageProcessingFailedEvent'
+    NotificationCreatedDomainMessage:
+      name: NotificationCreatedEvent
+      title: Notificación Creada
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/NotificationCreatedEvent'
+    NotificationReadDomainMessage:
+      name: NotificationReadEvent
+      title: Notificación Marcada como Leída
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/NotificationReadEvent'
+    NotificationBatchReadDomainMessage:
+      name: NotificationBatchReadEvent
+      title: Notificaciones Marcadas como Leídas en Lote
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/NotificationBatchReadEvent'
+    NotificationDeletedDomainMessage:
+      name: NotificationDeletedEvent
+      title: Notificación Eliminada
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/NotificationDeletedEvent'
+    UserRegisteredEvent:
+      name: UserRegisteredEvent
+      title: Usuario Registrado
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/UserRegisteredEvent'
+    ProjectCreatedEvent:
+      name: ProjectCreatedEvent
+      title: Proyecto Creado
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ProjectCreatedEvent'
+    ProjectUpdatedEvent:
+      name: ProjectUpdatedEvent
+      title: Proyecto Actualizado
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ProjectUpdatedEvent'
+    ProjectAssignedEvent:
+      name: ProjectAssignedEvent
+      title: Proyecto Asignado
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/ProjectAssignedEvent'
+    DirectNotificationEvent:
+      name: DirectNotificationEvent
+      title: Notificación Directa
+      contentType: application/json
+      payload:
+        $ref: '#/components/schemas/NotificationEvent'
+  schemas:
+    UUID:
+      type: string
+      format: uuid
+      description: Identificador único UUID v4
+      example: 550e8400-e29b-41d4-a716-446655440000
+    Timestamp:
+      type: string
+      format: date-time
+      description: Timestamp ISO 8601 en UTC
+      example: '2024-01-15T10:30:00Z'
+    ProcessingFeature:
+      type: integer
+      enum:
+        - 0
+        - 1
+      description: |
+        Tipo de procesamiento de imagen:
+        - 0: Generator (Text-to-image)
+        - 1: Editor (Image-to-image)
+    ProcessingParameters:
+      type: object
+      properties:
+        width:
+          type: integer
+          minimum: 64
+          maximum: 2048
+          default: 512
+        height:
+          type: integer
+          minimum: 64
+          maximum: 2048
+          default: 512
+        numInferenceSteps:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+        strength:
+          type: number
+          minimum: 0
+          maximum: 1
+          default: 0.75
+        guidanceScale:
+          type: number
+          minimum: 1
+          maximum: 20
+          default: 7.5
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 1
+        model:
+          type: string
+          default: gpt-image-1-mini-low
+    ProcessingResult:
+      type: object
+      properties:
+        model:
+          type: string
+        prompt:
+          type: string
+        parameters:
+          $ref: '#/components/schemas/ProcessingParameters'
+        processedUrls:
+          type: array
+          items:
+            type: string
+            format: uri
+        processingTimeMs:
+          type: integer
+        processedAt:
+          $ref: '#/components/schemas/Timestamp'
+    ImageUploadedEvent:
+      type: object
+      required:
+        - ImageId
+        - OwnerId
+        - Prompt
+        - Feature
+      properties:
+        ImageId:
+          $ref: '#/components/schemas/UUID'
+        OwnerId:
+          $ref: '#/components/schemas/UUID'
+        ImageUrl:
+          type: string
+          format: uri
+          nullable: true
+        Prompt:
+          type: string
+          maxLength: 1000
+        Feature:
+          $ref: '#/components/schemas/ProcessingFeature'
+        Parameters:
+          $ref: '#/components/schemas/ProcessingParameters'
+          nullable: true
+    ImageProcessingCompletedEvent:
+      type: object
+      required:
+        - ImageId
+        - UserId
+        - ProcessedImageUrls
+        - CompletedAt
+      properties:
+        ImageId:
+          type: string
+        UserId:
+          type: string
+        ImageUrl:
+          type: string
+          format: uri
+          nullable: true
+        ProcessedImageUrls:
+          type: array
+          items:
+            type: string
+            format: uri
+        ProcessingResults:
+          $ref: '#/components/schemas/ProcessingResult'
+          nullable: true
+        CompletedAt:
+          $ref: '#/components/schemas/Timestamp'
+    ProjectAssignedEvent:
+      type: object
+      required:
+        - ProjectId
+        - ProjectName
+        - AssignedUserId
+        - AssignedBy
+      properties:
+        ProjectId:
+          type: string
+        ProjectName:
+          type: string
+        AssignedUserId:
+          type: string
+        AssignedBy:
+          type: string
+    ImageProcessingFailedEvent:
+      type: object
+      required:
+        - ImageId
+        - UserId
+        - ErrorMessage
+        - ErrorCode
+        - FailedAt
+      properties:
+        ImageId:
+          type: string
+        UserId:
+          type: string
+        ImageUrl:
+          type: string
+          format: uri
+          nullable: true
+        ErrorMessage:
+          type: string
+        ErrorCode:
+          type: string
+          description: |
+            Código de error:
+            - CONTENT_MODERATION_VIOLATION: Contenido bloqueado
+            - PROCESSING_ERROR: Error de procesamiento
+            - TIMEOUT_ERROR: Timeout en procesamiento
+        FailedAt:
+          $ref: '#/components/schemas/Timestamp'
+    NotificationType:
+      type: string
+      enum:
+        - InApp
+        - Email
+        - Push
+        - Sms
+        - Image
+      description: Tipo de canal de notificación
+    NotificationEvent:
+      type: object
+      required:
+        - UserId
+        - Type
+        - Title
+        - Message
+      properties:
+        UserId:
+          type: string
+        Type:
+          $ref: '#/components/schemas/NotificationType'
+        Title:
+          type: string
+          maxLength: 200
+        Message:
+          type: string
+          maxLength: 2000
+        Metadata:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+    DomainEvent:
+      type: object
+      properties:
+        EventId:
+          $ref: '#/components/schemas/UUID'
+        OccurredAt:
+          $ref: '#/components/schemas/Timestamp'
+    NotificationCreatedEvent:
+      allOf:
+        - $ref: '#/components/schemas/DomainEvent'
+        - type: object
+          required:
+            - NotificationId
+            - UserId
+            - Type
+            - Title
+            - Message
+          properties:
+            NotificationId:
+              type: string
+            UserId:
+              type: string
+            Type:
+              $ref: '#/components/schemas/NotificationType'
+            Title:
+              type: string
+            Message:
+              type: string
+            Metadata:
+              type: object
+              additionalProperties:
+                type: string
+              nullable: true
+    NotificationReadEvent:
+      allOf:
+        - $ref: '#/components/schemas/DomainEvent'
+        - type: object
+          required:
+            - NotificationId
+            - UserId
+          properties:
+            NotificationId:
+              type: string
+            UserId:
+              type: string
+    NotificationBatchReadEvent:
+      allOf:
+        - $ref: '#/components/schemas/DomainEvent'
+        - type: object
+          required:
+            - UserId
+            - NotificationsCount
+          properties:
+            UserId:
+              type: string
+            NotificationsCount:
+              type: integer
+              minimum: 0
+    NotificationDeletedEvent:
+      allOf:
+        - $ref: '#/components/schemas/DomainEvent'
+        - type: object
+          required:
+            - NotificationId
+            - UserId
+          properties:
+            NotificationId:
+              type: string
+            UserId:
+              type: string
+    UserRegisteredEvent:
+      type: object
+      required:
+        - UserId
+        - Email
+        - Name
+      properties:
+        UserId:
+          type: string
+        Email:
+          type: string
+          format: email
+        Name:
+          type: string
+    ProjectCreatedEvent:
+      type: object
+      required:
+        - ProjectId
+        - ProjectName
+        - CreatorId
+        - TeamMemberIds
+      properties:
+        ProjectId:
+          type: string
+        ProjectName:
+          type: string
+        CreatorId:
+          type: string
+        TeamMemberIds:
+          type: array
+          items:
+            type: string
+    ProjectUpdatedEvent:
+      type: object
+      required:
+        - ProjectId
+        - ProjectName
+        - UpdatedBy
+        - StakeholderIds
+      properties:
+        ProjectId:
+          type: string
+        ProjectName:
+          type: string
+        UpdatedBy:
+          type: string
+        StakeholderIds:
+          type: array
+          items:
+            type: string

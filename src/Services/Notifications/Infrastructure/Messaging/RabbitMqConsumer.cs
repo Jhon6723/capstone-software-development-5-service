@@ -272,26 +272,29 @@ public class RabbitMqConsumer : BackgroundService
             using var document = JsonDocument.Parse(message);
             var root = document.RootElement;
 
-            if (root.TryGetProperty("ProcessedImageUrl", out _))
+            if (root.TryGetProperty("ProcessedImageUrls", out _))
             {
                 var imageId = root.GetProperty("ImageId").GetString() ?? "";
                 var userId = root.GetProperty("UserId").GetString() ?? "";
                 var imageUrl = root.GetProperty("ImageUrl").GetString() ?? "";
-                var processedImageUrl = root.GetProperty("ProcessedImageUrl").GetString() ?? "";
+                var processedImageUrls = root.GetProperty("ProcessedImageUrls").EnumerateArray()
+                    .Select(x => x.GetString() ?? "")
+                    .Where(x => !string.IsNullOrEmpty(x))
+                    .ToList();
                 var completedAt = root.GetProperty("CompletedAt").GetDateTime();
-                
+
                 // Extract ProcessingResults as JsonElement (can contain any JSON structure)
                 JsonElement? processingResults = null;
                 if (root.TryGetProperty("ProcessingResults", out var resultsElement))
                 {
                     processingResults = resultsElement;
                 }
-                
+
                 var completedEvent = new ImageProcessingCompletedEvent(
                     imageId,
                     userId,
                     imageUrl,
-                    processedImageUrl,
+                    processedImageUrls,
                     processingResults,
                     completedAt
                 );
@@ -366,7 +369,7 @@ public class RabbitMqConsumer : BackgroundService
                 { "eventType", "ImageProcessingCompleted" },
                 { "imageId", imageEvent.ImageId },
                 { "imageUrl", imageEvent.ImageUrl },
-                { "processedImageUrl", imageEvent.ProcessedImageUrl },
+                { "processedImageUrls", string.Join(",", imageEvent.ProcessedImageUrls) },
                 { "completedAt", imageEvent.CompletedAt.ToString("O") }
             };
 

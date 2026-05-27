@@ -40,14 +40,18 @@ public record NotificationEvent(
 
 public record ImageUploadedEvent(
     string ImageId,
-    string OwnerId
+    string OwnerId,
+    string Prompt,
+    int Feature,
+    string? ImageUrl = null,
+    JsonElement? Parameters = null
 );
 
 public record ImageProcessingCompletedEvent(
     string ImageId,
     string UserId,
     string ImageUrl,
-    string ProcessedImageUrl,
+    List<string> ProcessedImageUrls,
     JsonElement? ProcessingResults,
     DateTime CompletedAt
 );
