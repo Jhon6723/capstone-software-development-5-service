@@ -240,3 +240,6 @@ Migrations/
 venv/
 env/
 .env*
+
+# AsyncAPI Generator HTML output (generated, do not commit)
+docs/asyncapi-html/

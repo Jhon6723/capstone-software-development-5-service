@@ -306,3 +306,10 @@ docker:ia:
       src/Services/IA
     - docker push $REGISTRY_IA:$CI_COMMIT_SHA
     - docker push $REGISTRY_IA:latest
+
+validate:asyncapi:
+  stage: build
+  image: node:20-alpine
+  script:
+    - npm install -g @asyncapi/cli
+    - asyncapi validate docs/asyncapi.yaml
