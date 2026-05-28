@@ -5,6 +5,8 @@ using Microsoft.OpenApi.Models;
 using PixPro.Services.Notifications.Application;
 using PixPro.Services.Notifications.Infrastructure;
 using PixPro.Services.Notifications.Infrastructure.Persistence;
+using Microsoft.AspNetCore.SignalR;
+using StackExchange.Redis;
 
 // Load .env file if it exists (for local development without Docker)
 var envPath = Path.Combine(Directory.GetCurrentDirectory(), "../../../../.env");
@@ -16,6 +18,16 @@ if (File.Exists(envPath))
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
+builder.Services.AddSignalR()
+    .AddStackExchangeRedis(options =>
+    {
+        options.Configuration = new StackExchange.Redis.ConfigurationOptions
+        {
+            EndPoints = { builder.Configuration["ConnectionStrings:Redis"] ?? "redis:6379" },
+            Password = builder.Configuration["Redis:Password"],
+            AbortOnConnectFail = false,
+        };
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHealthChecks();
 
@@ -47,7 +59,7 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = jwtAudience,
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret))
     };
-    
+
     // Enable JWT in WebSocket (from query string)
     options.Events = new JwtBearerEvents
     {
@@ -55,12 +67,13 @@ builder.Services.AddAuthentication(options =>
         {
             var accessToken = context.Request.Query["access_token"];
             var path = context.HttpContext.Request.Path;
-            
-            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/api/websocket"))
+
+            if (!string.IsNullOrEmpty(accessToken) &&
+                (path.StartsWithSegments("/api/websocket") || path.StartsWithSegments("/hubs")))
             {
                 context.Token = accessToken;
             }
-            
+
             return Task.CompletedTask;
         }
     };
@@ -81,7 +94,7 @@ builder.Services.AddSwaggerGen(options =>
             Email = "support@pixpro.com"
         }
     });
-    
+
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Description = "JWT Authorization header using the Bearer scheme. Enter 'Bearer' [space] and then your token",
@@ -90,7 +103,7 @@ builder.Services.AddSwaggerGen(options =>
         Type = SecuritySchemeType.ApiKey,
         Scheme = "Bearer"
     });
-    
+
     options.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
         {
@@ -115,12 +128,12 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod()
               .AllowAnyHeader();
     });
-    
+
     options.AddPolicy("WebSocketPolicy", policy =>
     {
         policy.WithOrigins(
                 "https://localhost:3000", "https://localhost:5173",
-                "http://localhost:3000",  "http://localhost:5173")
+                "http://localhost:3000", "http://localhost:5173")
               .AllowAnyMethod()
               .AllowAnyHeader()
               .AllowCredentials();
@@ -154,6 +167,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<PixPro.Services.Notifications.API.Hubs.NotificationHub>("/hubs/notifications");
 app.MapHealthChecks("/health");
 
 app.Run();
