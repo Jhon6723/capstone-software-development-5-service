@@ -28,7 +28,7 @@ public class ImagesController : ControllerBase
     public async Task<IActionResult> Upload(
         IFormFile? file,
         [FromForm] string prompt,
-        [FromForm] int? feature = null,
+        [FromForm] int feature,
         [FromForm] string? parameters = null,
         CancellationToken cancellationToken = default)
     {
@@ -57,19 +57,14 @@ public class ImagesController : ControllerBase
             }
         }
 
-        // Determine feature mode
-        ProcessingFeature? processingFeature = feature.HasValue
-            ? (ProcessingFeature)feature.Value
-            : null;
+        // Validate and parse feature
+        if (feature != 0 && feature != 1)
+            return BadRequest(new { error = "Feature must be 0 (Generator) or 1 (Editor)." });
 
-        // Auto-detect feature if not specified
-        if (!processingFeature.HasValue)
-        {
-            processingFeature = file != null ? ProcessingFeature.Editor : ProcessingFeature.Generator;
-        }
+        var processingFeature = (ProcessingFeature)feature;
 
         // Validate based on feature mode
-        if (processingFeature.Value == ProcessingFeature.Editor)
+        if (processingFeature == ProcessingFeature.Editor)
         {
             // Editor mode (image-to-image) requires file and model parameter
             if (file == null)
