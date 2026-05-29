@@ -39,12 +39,11 @@ public class UploadImageRequest
     public string Prompt { get; set; } = string.Empty;
 
     /// <summary>
-    /// Processing feature: 0=Generator (text-to-image), 1=Editor (image-to-image)
-    /// Auto-detected if not specified (based on file presence)
+    /// Processing feature: 0=Generator (text-to-image), 1=Editor (image-to-image) (required)
     /// </summary>
     /// <example>0</example>
-    [DefaultValue(0)]
-    public int? Feature { get; set; }
+    [Required]
+    public int Feature { get; set; }
 
     /// <summary>
     /// Processing parameters as JSON string (optional for Generator, required for Editor)

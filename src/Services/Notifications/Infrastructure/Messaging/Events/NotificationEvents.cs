@@ -42,7 +42,7 @@ public record ImageUploadedEvent(
     string ImageId,
     string OwnerId,
     string Prompt,
-    int Feature,
+    string Feature,
     string? ImageUrl = null,
     JsonElement? Parameters = null
 );
