@@ -276,6 +276,7 @@ public class RabbitMqConsumer : BackgroundService
             {
                 var imageId = root.GetProperty("ImageId").GetString() ?? "";
                 var userId = root.GetProperty("UserId").GetString() ?? "";
+                var projectId = root.GetProperty("ProjectId").GetString() ?? "";
                 var imageUrl = root.GetProperty("ImageUrl").GetString() ?? "";
                 var processedImageUrls = root.GetProperty("ProcessedImageUrls").EnumerateArray()
                     .Select(x => x.GetString() ?? "")
@@ -293,6 +294,7 @@ public class RabbitMqConsumer : BackgroundService
                 var completedEvent = new ImageProcessingCompletedEvent(
                     imageId,
                     userId,
+                    projectId,
                     imageUrl,
                     processedImageUrls,
                     processingResults,
@@ -343,7 +345,8 @@ public class RabbitMqConsumer : BackgroundService
                 Metadata: new Dictionary<string, string>
                 {
                     { "eventType", "ImageUploaded" },
-                    { "imageId", imageEvent.ImageId }
+                    { "imageId", imageEvent.ImageId },
+                    { "projectId", imageEvent.ProjectId },
                 }
             );
 
@@ -370,6 +373,7 @@ public class RabbitMqConsumer : BackgroundService
                 { "imageId", imageEvent.ImageId },
                 { "imageUrl", imageEvent.ImageUrl },
                 { "processedImageUrls", string.Join(",", imageEvent.ProcessedImageUrls) },
+                { "projectId", imageEvent.ProjectId },
                 { "completedAt", imageEvent.CompletedAt.ToString("O") }
             };
 
@@ -419,6 +423,7 @@ public class RabbitMqConsumer : BackgroundService
                 { "imageUrl", imageEvent.ImageUrl },
                 { "errorMessage", imageEvent.ErrorMessage },
                 { "errorCode", imageEvent.ErrorCode },
+                { "projectId", imageEvent.ProjectId },
                 { "failedAt", imageEvent.FailedAt.ToString("O") }
             };
 
