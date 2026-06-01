@@ -41,6 +41,7 @@ public record NotificationEvent(
 public record ImageUploadedEvent(
     string ImageId,
     string OwnerId,
+    string ProjectId,
     string Prompt,
     string Feature,
     string? ImageUrl = null,
@@ -50,6 +51,7 @@ public record ImageUploadedEvent(
 public record ImageProcessingCompletedEvent(
     string ImageId,
     string UserId,
+    string ProjectId,
     string ImageUrl,
     List<string> ProcessedImageUrls,
     JsonElement? ProcessingResults,
@@ -59,6 +61,7 @@ public record ImageProcessingCompletedEvent(
 public record ImageProcessingFailedEvent(
     string ImageId,
     string UserId,
+    string ProjectId,
     string ImageUrl,
     string ErrorMessage,
     string ErrorCode,

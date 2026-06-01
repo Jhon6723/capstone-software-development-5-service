@@ -9,6 +9,13 @@ public sealed class Project
     public DateTimeOffset CreatedAt { get; private set; }
     public Guid OwnerId { get; private set; }
 
+    // TODO: Future feature - Team Members
+    // Implement many-to-many relationship with Users from Auth service
+    // This would require a ProjectMember entity with: ProjectId, UserId, Role, JoinedAt
+    // For now, projects are single-owner only
+
+    public ICollection<Image> Images { get; private set; } = new List<Image>();
+
     public Project(string name, Guid ownerId)
     {
         if (ownerId == Guid.Empty)

@@ -27,6 +27,7 @@ public class ImagesController : ControllerBase
     ///
     /// <b>Validation Rules:</b>
     /// <ul>
+    ///   <li><b>ProjectId</b>: Required. Must be a valid project GUID</li>
     ///   <li><b>Feature</b>: Required. Must be 0 (Generator) or 1 (Editor)</li>
     ///   <li><b>Prompt</b>: Required in all modes</li>
     ///   <li><b>Feature=0 (Generator)</b>: No file needed. Parameters optional.</li>
@@ -41,6 +42,7 @@ public class ImagesController : ControllerBase
     /// <b>Example - Text-to-Image:</b>
     /// <code>
     /// {
+    ///   "projectId": "550e8400-e29b-41d4-a716-446655440000",
     ///   "prompt": "A futuristic car in neon city",
     ///   "feature": 0
     /// }
@@ -49,6 +51,7 @@ public class ImagesController : ControllerBase
     /// <b>Example - Image-to-Image:</b>
     /// <code>
     /// {
+    ///   "projectId": "550e8400-e29b-41d4-a716-446655440000",
     ///   "file": [upload image],
     ///   "prompt": "Add a moon in the sky",
     ///   "feature": 1,
@@ -59,7 +62,7 @@ public class ImagesController : ControllerBase
     /// The image will be processed asynchronously. Status updates are sent via WebSocket.
     /// Requires valid JWT token.
     /// </remarks>
-    /// <param name="request">Image upload request with optional file, required prompt and feature, and optional processing parameters</param>
+    /// <param name="request">Image upload request with optional file, required projectId, prompt and feature, and optional processing parameters</param>
     /// <returns>Image upload confirmation with ImageId</returns>
     [HttpPost("upload")]
     [Consumes("multipart/form-data")]

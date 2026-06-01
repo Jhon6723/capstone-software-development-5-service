@@ -32,6 +32,13 @@ public class UploadImageRequest
     public IFormFile? File { get; set; }
 
     /// <summary>
+    /// Project ID to associate the image with (required)
+    /// </summary>
+    /// <example>550e8400-e29b-41d4-a716-446655440000</example>
+    [Required]
+    public Guid ProjectId { get; set; }
+
+    /// <summary>
     /// Text prompt describing the desired image or transformation (required)
     /// </summary>
     /// <example>Transform this image into a cyberpunk style with neon lights</example>
