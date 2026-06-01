@@ -67,8 +67,10 @@ services:
       - RabbitMQ__Username=${RABBITMQ_USER}
       - RabbitMQ__Password=${RABBITMQ_PASSWORD}
     depends_on:
-      - rabbitmq
-      - projects-db
+      rabbitmq:
+        condition: service_healthy
+      projects-db:
+        condition: service_started
 
   ia:
     build:
