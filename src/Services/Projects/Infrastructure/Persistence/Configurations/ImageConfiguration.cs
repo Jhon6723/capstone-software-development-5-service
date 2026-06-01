@@ -68,6 +68,21 @@ public sealed class ImageConfiguration : IEntityTypeConfiguration<Image>
             .HasDefaultValue("Pending")
             .IsRequired();
 
+        builder.Property(i => i.ProjectId)
+            .HasColumnName("project_id")
+            .HasColumnType("uuid")
+            .IsRequired();
+
+        builder.HasOne(i => i.Project)
+            .WithMany(p => p.Images)
+            .HasForeignKey(i => i.ProjectId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Property(i => i.OriginalImageId)
+            .HasColumnName("original_image_id")
+            .HasColumnType("uuid")
+            .IsRequired(false);  // NULL = imagen original, valor = referencia a original (puede ser virtual)
+
         builder.Property(i => i.OwnerId)
             .HasColumnName("owner_id")
             .HasColumnType("uuid")
@@ -79,5 +94,7 @@ public sealed class ImageConfiguration : IEntityTypeConfiguration<Image>
             .IsRequired();
 
         builder.HasIndex(i => i.OwnerId);
+        builder.HasIndex(i => i.ProjectId);
+        builder.HasIndex(i => i.OriginalImageId);  // Para buscar procesadas de una original
     }
 }

@@ -22,6 +22,7 @@ public record ProcessingParameters(
 public record ImageUploadedEvent(
     Guid ImageId,
     Guid OwnerId,
+    Guid ProjectId,
     string? ImageUrl,
     string Prompt,
     ProcessingFeature Feature,

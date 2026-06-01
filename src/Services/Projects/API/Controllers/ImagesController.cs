@@ -29,6 +29,7 @@ public class ImagesController : ControllerBase
         IFormFile? file,
         [FromForm] string prompt,
         [FromForm] int feature,
+        [FromForm] Guid projectId,
         [FromForm] string? parameters = null,
         CancellationToken cancellationToken = default)
     {
@@ -40,6 +41,9 @@ public class ImagesController : ControllerBase
 
         if (!Guid.TryParse(ownerIdClaim.Value, out var ownerId))
             return BadRequest(new { error = "Invalid user ID format." });
+
+        if (projectId == Guid.Empty)
+            return BadRequest(new { error = "ProjectId is required." });
 
         if (string.IsNullOrWhiteSpace(prompt))
             return BadRequest(new { error = "Prompt is required." });
@@ -75,7 +79,7 @@ public class ImagesController : ControllerBase
         }
         // Generator mode (text-to-image) with Feature=0: file is optional
 
-        var request = new UploadImageRequest(file, ownerId, prompt, processingFeature, processingParams);
+        var request = new UploadImageRequest(file, ownerId, projectId, prompt, processingFeature, processingParams);
         var result = await _imageService.UploadAsync(request, cancellationToken);
 
         if (!result.IsSuccess)

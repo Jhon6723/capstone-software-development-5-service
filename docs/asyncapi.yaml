@@ -444,12 +444,15 @@ components:
       required:
         - ImageId
         - OwnerId
+        - ProjectId
         - Prompt
         - Feature
       properties:
         ImageId:
           $ref: '#/components/schemas/UUID'
         OwnerId:
+          $ref: '#/components/schemas/UUID'
+        ProjectId:
           $ref: '#/components/schemas/UUID'
         ImageUrl:
           type: string
@@ -468,12 +471,15 @@ components:
       required:
         - ImageId
         - UserId
+        - ProjectId
         - ProcessedImageUrls
         - CompletedAt
       properties:
         ImageId:
           type: string
         UserId:
+          type: string
+        ProjectId:
           type: string
         ImageUrl:
           type: string
@@ -510,6 +516,7 @@ components:
       required:
         - ImageId
         - UserId
+        - ProjectId
         - ErrorMessage
         - ErrorCode
         - FailedAt
@@ -517,6 +524,8 @@ components:
         ImageId:
           type: string
         UserId:
+          type: string
+        ProjectId:
           type: string
         ImageUrl:
           type: string
