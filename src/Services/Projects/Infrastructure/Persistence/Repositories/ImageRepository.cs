@@ -13,6 +13,40 @@ public sealed class ImageRepository(ProjectsDbContext context) : IImageRepositor
         await _context.Images.AddAsync(image, cancellationToken);
     }
 
+    public async Task<Image?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        return await _context.Images.FindAsync(new object[] { id }, cancellationToken);
+    }
+
+    public async Task<int> CountByOwnerIdAsync(Guid ownerId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Images.CountAsync(i => i.OwnerId == ownerId, cancellationToken);
+    }
+
+    public async Task<int> CountByProjectIdAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Images.CountAsync(i => i.ProjectId == projectId, cancellationToken);
+    }
+
+    public async Task<(List<Image> Images, int Total)> GetPaginatedByProjectIdAsync(
+        Guid projectId,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _context.Images.Where(i => i.ProjectId == projectId);
+
+        var total = await query.CountAsync(cancellationToken);
+
+        var images = await query
+            .OrderByDescending(i => i.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return (images, total);
+    }
+
     public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         return await _context.SaveChangesAsync(cancellationToken);

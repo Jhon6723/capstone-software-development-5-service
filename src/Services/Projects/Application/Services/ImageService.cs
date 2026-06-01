@@ -83,7 +83,8 @@ public class ImageService : IImageService
                     uploaded.Bytes,
                     uploaded.Width,
                     uploaded.Height,
-                    request.OwnerId);
+                    request.OwnerId,
+                    request.ProjectId);
 
                 await _imageRepository.AddAsync(image, cancellationToken);
                 await _imageRepository.SaveChangesAsync(cancellationToken);
@@ -111,6 +112,7 @@ public class ImageService : IImageService
                 var integrationEvent = new ImageUploadedEvent(
                     imageId,
                     request.OwnerId,
+                    request.ProjectId,
                     imageUrl,
                     request.Prompt,
                     feature,
@@ -118,7 +120,7 @@ public class ImageService : IImageService
 
                 await _messagePublisher.PublishAsync(
                     integrationEvent,
-                    "image-processing-events",
+                    "image-events",
                     cancellationToken);
 
                 _logger.LogInformation(
