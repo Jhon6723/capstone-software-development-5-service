@@ -221,6 +221,7 @@ class RabbitMqConsumer:
             completed = ImageProcessingCompletedEvent(
                 ImageId=event.ImageId,
                 UserId=event.OwnerId,
+                ProjectId=event.ProjectId,
                 ImageUrl=event.ImageUrl,
                 ProcessedImageUrls=processed_urls,
                 ProcessingResults=results,
@@ -253,6 +254,7 @@ class RabbitMqConsumer:
             failed = ImageProcessingFailedEvent(
                 ImageId=event.ImageId,
                 UserId=event.OwnerId,
+                ProjectId=event.ProjectId,
                 ImageUrl=event.ImageUrl,
                 ErrorMessage=error_message,
                 ErrorCode="CONTENT_MODERATION_VIOLATION",
@@ -280,6 +282,7 @@ class RabbitMqConsumer:
             failed = ImageProcessingFailedEvent(
                 ImageId=event.ImageId,
                 UserId=event.OwnerId,
+                ProjectId=event.ProjectId,
                 ImageUrl=event.ImageUrl,
                 ErrorMessage=str(proc_ex),
                 ErrorCode="PROCESSING_ERROR",

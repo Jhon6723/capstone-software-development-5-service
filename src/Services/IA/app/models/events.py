@@ -48,6 +48,7 @@ class ImageUploadedEvent(BaseModel):
     """Event triggered when an image is uploaded for processing"""
     ImageId: str = Field(alias="ImageId")
     OwnerId: str = Field(alias="OwnerId")
+    ProjectId: str = Field(alias="ProjectId")
     ImageUrl: Optional[str] = Field(default=None, alias="ImageUrl")
     Prompt: str = Field(default="", alias="Prompt")
     Feature: ProcessingFeature = Field(default=ProcessingFeature.GENERATOR, alias="Feature")
@@ -62,6 +63,7 @@ class ImageProcessingCompletedEvent(BaseModel):
     """Event triggered when image processing is complete"""
     ImageId: str
     UserId: str
+    ProjectId: str
     ImageUrl: Optional[str] = Field(default=None)
     ProcessedImageUrls: list[str]
     ProcessingResults: Optional[ProcessingResult] = None
@@ -72,6 +74,7 @@ class ImageProcessingFailedEvent(BaseModel):
     """Event triggered when image processing fails"""
     ImageId: str
     UserId: str
+    ProjectId: str
     ImageUrl: Optional[str] = Field(default=None)
     ErrorMessage: str
     ErrorCode: str
