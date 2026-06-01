@@ -89,60 +89,33 @@ public class ProjectsController : ControllerBase
     }
 
     /// <summary>
-    /// Update an existing project
+    /// Get paginated images for a project
     /// </summary>
     /// <remarks>
-    /// Updates project information.
-    /// Requires valid JWT token and project ownership.
+    /// Returns paginated images that belong to the specified project.
+    ///
+    /// <b>Query Parameters:</b>
+    /// <ul>
+    ///   <li><b>page</b>: Page number (default: 1)</li>
+    ///   <li><b>limit</b>: Items per page, max 100 (default: 12)</li>
+    /// </ul>
+    ///
+    /// Requires valid JWT token.
     /// </remarks>
     /// <param name="id">Project ID</param>
-    /// <param name="request">Project update request</param>
-    /// <returns>Updated project details</returns>
-    [HttpPut("{id}")]
-    [ProducesResponseType(typeof(ProjectResponse), StatusCodes.Status200OK)]
+    /// <param name="page">Page number (default: 1)</param>
+    /// <param name="limit">Items per page (default: 12)</param>
+    /// <returns>Paginated list of project images</returns>
+    [HttpGet("{id}/images")]
+    [ProducesResponseType(typeof(ImageListResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public IActionResult Update(string id, [FromBody] UpdateProjectRequest request)
+    public IActionResult GetProjectImages(
+        string id,
+        [FromQuery] int page = 1,
+        [FromQuery] int limit = 12)
     {
         throw new NotImplementedException("This endpoint is proxied by YARP to Projects service");
     }
 
-    /// <summary>
-    /// Delete a project
-    /// </summary>
-    /// <remarks>
-    /// Permanently deletes a project and all its images.
-    /// Requires valid JWT token and project ownership.
-    /// </remarks>
-    /// <param name="id">Project ID</param>
-    /// <returns>No content on success</returns>
-    [HttpDelete("{id}")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public IActionResult Delete(string id)
-    {
-        throw new NotImplementedException("This endpoint is proxied by YARP to Projects service");
-    }
-
-    /// <summary>
-    /// Add a member to a project
-    /// </summary>
-    /// <remarks>
-    /// Adds a team member to the project.
-    /// Requires valid JWT token and project ownership.
-    /// </remarks>
-    /// <param name="id">Project ID</param>
-    /// <param name="request">Add member request</param>
-    /// <returns>Updated project details</returns>
-    [HttpPost("{id}/members")]
-    [ProducesResponseType(typeof(ProjectResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public IActionResult AddMember(string id, [FromBody] AddMemberRequest request)
-    {
-        throw new NotImplementedException("This endpoint is proxied by YARP to Projects service");
-    }
 }

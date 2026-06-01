@@ -20,8 +20,10 @@ public class AuthController : ControllerBase
     /// No authentication required.
     /// </remarks>
     [HttpPost("register")]
-    [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(UserResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public IActionResult Register([FromBody] RegisterRequest request)
     {
         // This method is never executed - YARP proxies the request
@@ -38,6 +40,7 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
     public IActionResult Login([FromBody] LoginRequest request)
     {
         throw new NotImplementedException("This endpoint is proxied by YARP");
@@ -47,10 +50,10 @@ public class AuthController : ControllerBase
     /// Get current user profile
     /// </summary>
     /// <remarks>
-    /// Requires valid JWT token in Authorization header.
+    /// Returns Auth0 user claims extracted from the validated token.
     /// </remarks>
     [HttpGet("me")]
-    [ProducesResponseType(typeof(UserResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(CurrentUserResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public IActionResult GetCurrentUser()
     {

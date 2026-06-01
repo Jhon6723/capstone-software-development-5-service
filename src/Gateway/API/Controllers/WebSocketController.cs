@@ -39,12 +39,53 @@ public class WebSocketController : ControllerBase
     /// 
     /// Keep-alive interval: 2 minutes
     /// </remarks>
-    [HttpGet]
+    [HttpGet("connect")]
+    [Authorize]
     [ApiExplorerSettings(IgnoreApi = false)]
     [ProducesResponseType(StatusCodes.Status101SwitchingProtocols)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public IActionResult ConnectWebSocket()
+    {
+        throw new NotImplementedException("This endpoint is proxied by YARP");
+    }
+
+    /// <summary>
+    /// Get WebSocket service status
+    /// </summary>
+    /// <remarks>
+    /// Returns health information and active connection count.
+    /// </remarks>
+    [HttpGet("status")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public IActionResult GetStatus()
+    {
+        throw new NotImplementedException("This endpoint is proxied by YARP");
+    }
+
+    /// <summary>
+    /// Get banned IP addresses
+    /// </summary>
+    /// <remarks>
+    /// Returns the list of currently banned IPs.
+    /// </remarks>
+    [HttpGet("banned")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public IActionResult GetBannedIps()
+    {
+        throw new NotImplementedException("This endpoint is proxied by YARP");
+    }
+
+    /// <summary>
+    /// Unban an IP address
+    /// </summary>
+    /// <remarks>
+    /// Removes an IP from the WebSocket ban list.
+    /// </remarks>
+    [HttpDelete("banned/{ipAddress}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public IActionResult UnbanIp(string ipAddress)
     {
         throw new NotImplementedException("This endpoint is proxied by YARP");
     }
