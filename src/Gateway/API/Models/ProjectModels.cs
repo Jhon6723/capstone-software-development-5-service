@@ -20,11 +20,6 @@ public class CreateProjectRequest
     /// </summary>
     [DefaultValue("This is a test project for image processing")]
     public string? Description { get; set; }
-
-    /// <summary>
-    /// List of team member user IDs
-    /// </summary>
-    public List<string>? TeamMemberIds { get; set; }
 }
 
 /// <summary>
@@ -71,19 +66,19 @@ public class ProjectResponse
     public required string OwnerId { get; set; }
 
     /// <summary>
-    /// List of team members
-    /// </summary>
-    public List<string>? TeamMemberIds { get; set; }
-
-    /// <summary>
     /// Project creation date
     /// </summary>
-    public DateTime CreatedAt { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
 
     /// <summary>
     /// Last update date
     /// </summary>
-    public DateTime UpdatedAt { get; set; }
+    public DateTimeOffset? UpdatedAt { get; set; }
+
+    /// <summary>
+    /// Number of images in the project
+    /// </summary>
+    public int ImageCount { get; set; }
 }
 
 /// <summary>
@@ -107,12 +102,12 @@ public class ProjectListResponse
     /// <summary>
     /// List of projects
     /// </summary>
-    public required List<ProjectResponse> Projects { get; set; }
+    public required List<ProjectResponse> Data { get; set; }
 
     /// <summary>
     /// Total number of projects
     /// </summary>
-    public int TotalCount { get; set; }
+    public int Total { get; set; }
 
     /// <summary>
     /// Current page number
@@ -123,4 +118,9 @@ public class ProjectListResponse
     /// Page size
     /// </summary>
     public int PageSize { get; set; }
+
+    /// <summary>
+    /// Indicates if there are more pages
+    /// </summary>
+    public bool HasMore { get; set; }
 }
