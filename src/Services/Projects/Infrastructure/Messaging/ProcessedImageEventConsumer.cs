@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Net.Sockets;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -9,6 +10,7 @@ using PixPro.Services.Projects.Domain.Entities;
 using PixPro.Services.Projects.Domain.Repositories;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using RabbitMQ.Client.Exceptions;
 
 namespace PixPro.Services.Projects.Infrastructure.Messaging;
 
@@ -16,6 +18,7 @@ public class ProcessedImageEventConsumer : BackgroundService
 {
     private readonly ILogger<ProcessedImageEventConsumer> _logger;
     private readonly IServiceProvider _serviceProvider;
+    private readonly ConnectionFactory _factory;
     private IConnection? _connection;
     private IModel? _channel;
 
@@ -27,24 +30,70 @@ public class ProcessedImageEventConsumer : BackgroundService
         _logger = logger;
         _serviceProvider = serviceProvider;
 
-        var factory = new ConnectionFactory
+        _factory = new ConnectionFactory
         {
             HostName = configuration["RabbitMQ:Host"] ?? "localhost",
             UserName = configuration["RabbitMQ:Username"] ?? "guest",
-            Password = configuration["RabbitMQ:Password"] ?? "guest"
+            Password = configuration["RabbitMQ:Password"] ?? "guest",
+            AutomaticRecoveryEnabled = true,
+            TopologyRecoveryEnabled = true,
+            NetworkRecoveryInterval = TimeSpan.FromSeconds(5)
         };
+    }
 
-        _connection = factory.CreateConnection();
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                InitializeRabbitMq();
+                StartConsuming();
+
+                _logger.LogInformation("ProcessedImageEventConsumer running and consuming messages");
+
+                await Task.Delay(Timeout.Infinite, stoppingToken);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (BrokerUnreachableException ex)
+            {
+                _logger.LogWarning(ex, "RabbitMQ not reachable yet. Retrying in 5 seconds...");
+                await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+            }
+            catch (SocketException ex)
+            {
+                _logger.LogWarning(ex, "RabbitMQ socket not ready yet. Retrying in 5 seconds...");
+                await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error in ProcessedImageEventConsumer. Retrying in 5 seconds...");
+                await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+            }
+        }
+    }
+
+    private void InitializeRabbitMq()
+    {
+        _connection = _factory.CreateConnection();
         _channel = _connection.CreateModel();
 
         // Declare exchange (same as IA publishes to)
         _channel.ExchangeDeclare("processed-image-events", ExchangeType.Fanout, durable: true);
 
-        _logger.LogInformation("ProcessedImageEventConsumer initialized, will bind to 'processed-image-events'");
+        _logger.LogInformation("ProcessedImageEventConsumer initialized, bound to 'processed-image-events'");
     }
 
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    private void StartConsuming()
     {
+        if (_channel is null)
+        {
+            throw new InvalidOperationException("RabbitMQ channel is not initialized.");
+        }
+
         // Declare durable queue (survives restarts)
         var queueName = "projects-processed-images-queue";
         _channel.QueueDeclare(queueName, durable: true, exclusive: false, autoDelete: false);
@@ -109,7 +158,7 @@ public class ProcessedImageEventConsumer : BackgroundService
                         {
                             _logger.LogError(ex, "Error saving processed images for ImageId: {ImageId}", eventData.ImageId);
                         }
-                    }, stoppingToken);
+                    });
                 }
 
                 _channel?.BasicAck(ea.DeliveryTag, false);
@@ -124,8 +173,6 @@ public class ProcessedImageEventConsumer : BackgroundService
         _channel.BasicConsume(queueName, false, consumer);
 
         _logger.LogInformation("Started consuming from queue '{QueueName}'", queueName);
-
-        return Task.CompletedTask;
     }
 
     public override void Dispose()
