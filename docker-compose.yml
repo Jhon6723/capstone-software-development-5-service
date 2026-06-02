@@ -1,14 +1,6 @@
 # service/docker-compose.yml
 services:
-  frontend:
-    image: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/client/client:latest
-    ports:
-      - "80:80"
-    networks:
-      - pixpro_net
-
   gateway:
-    #image: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/gateway:latest
     build:
       context: .
       dockerfile: src/Gateway/API/Dockerfile # Uncomment if you want to build locally instead of using the registry image
@@ -27,7 +19,6 @@ services:
       - ReverseProxy__Clusters__notifications-cluster__Destinations__notifications-api-1__Address=http://notifications:8083
 
   auth:
-    #image: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/auth:latest
     build:
       context: .
       dockerfile: src/Services/Auth/API/Dockerfile # Uncomment if you want to build locally instead of using the registry image
@@ -45,7 +36,6 @@ services:
 
 
   projects:
-    #image: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/projects:latest
     build:
       context: .
       dockerfile: src/Services/Projects/API/Dockerfile # Uncomment if you want to build locally instead of using the registry image
@@ -112,7 +102,6 @@ services:
       - pixpro_net
 
   notifications:
-    # image: registry.gitlab.com/jala-university1/cohort-3/es.co.cssd-352.ga.t1.26.m2/sa/syntaxerror2/pix-pro/service/service/notifications:latest
     build:
       context: .
       dockerfile: src/Services/Notifications/API/Dockerfile # Uncomment if you want to build locally instead of using the registry image
