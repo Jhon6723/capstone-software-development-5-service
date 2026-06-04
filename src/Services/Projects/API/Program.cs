@@ -102,7 +102,12 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("Admin", policy =>
+        policy.RequireAuthenticatedUser()
+              .RequireRole("Admin"));
+});
 
 builder.Services.AddSwaggerGen(options =>
 {

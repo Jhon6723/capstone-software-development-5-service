@@ -127,7 +127,12 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("Admin", policy =>
+        policy.RequireAuthenticatedUser()
+              .RequireRole("Admin"));
+});
 
 // Add Controllers for Swagger documentation
 builder.Services.AddControllers();

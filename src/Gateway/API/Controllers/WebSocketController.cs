@@ -57,6 +57,7 @@ public class WebSocketController : ControllerBase
     /// Returns health information and active connection count.
     /// </remarks>
     [HttpGet("status")]
+    [Authorize(Policy = "Admin")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public IActionResult GetStatus()
     {
@@ -70,6 +71,7 @@ public class WebSocketController : ControllerBase
     /// Returns the list of currently banned IPs.
     /// </remarks>
     [HttpGet("banned")]
+    [Authorize(Policy = "Admin")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public IActionResult GetBannedIps()
     {
@@ -83,6 +85,7 @@ public class WebSocketController : ControllerBase
     /// Removes an IP from the WebSocket ban list.
     /// </remarks>
     [HttpDelete("banned/{ipAddress}")]
+    [Authorize(Policy = "Admin")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public IActionResult UnbanIp(string ipAddress)

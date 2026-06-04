@@ -1,3 +1,4 @@
+using PixPro.Services.Auth.Domain.Enums;
 using PixPro.Services.Auth.Domain.ValueObjects;
 
 namespace PixPro.Services.Auth.Domain.Entities;
@@ -8,9 +9,10 @@ public sealed class User
     public string? Auth0Id { get; private set; }
     public string Email { get; private set; }
     public string Password { get; private set; }
+    public UserRole Role { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
 
-    public User(string? auth0Id, string email, string hashedPassword)
+    public User(string? auth0Id, string email, string hashedPassword, UserRole role = UserRole.User)
     {
         if (string.IsNullOrWhiteSpace(hashedPassword))
             throw new ArgumentException("Hashed password cannot be null or empty.", nameof(hashedPassword));
@@ -21,6 +23,7 @@ public sealed class User
         Auth0Id = string.IsNullOrWhiteSpace(auth0Id) ? null : auth0Id.Trim();
         Email = emailVo.Value;
         Password = hashedPassword;
+        Role = role;
         CreatedAt = DateTimeOffset.UtcNow;
     }
 
@@ -29,6 +32,7 @@ public sealed class User
         Auth0Id = null;
         Email = string.Empty;
         Password = string.Empty;
+        Role = UserRole.User;
     }
 
     public void UpdateAuth0Id(string auth0Id)

@@ -84,6 +84,7 @@ public class AuthController : ControllerBase
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>User information</returns>
     [HttpGet("users/{email}")]
+    [Authorize(Policy = "Admin")]
     [ProducesResponseType(typeof(UserResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetByEmail(
@@ -98,10 +99,10 @@ public class AuthController : ControllerBase
     }
 
     /// <summary>
-    /// Health check endpoint
+    /// Get current authenticated user profile
     /// </summary>
     [HttpGet("me")]
-    [Authorize(AuthenticationSchemes = "Auth0")]
+    [Authorize]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public IActionResult GetCurrentUser()
@@ -110,10 +111,15 @@ public class AuthController : ControllerBase
                ?? User.FindFirst("sub")?.Value;
         var email = User.FindFirst(ClaimTypes.Email)?.Value
                  ?? User.FindFirst("email")?.Value;
+        var role = User.FindFirst(ClaimTypes.Role)?.Value
+                ?? User.FindFirst("role")?.Value;
+
+        // Detect if Auth0 (has 'name' claim) or Local JWT
         var name = User.FindFirst("name")?.Value;
         var picture = User.FindFirst("picture")?.Value;
+        var authProvider = name != null ? "Auth0" : "Local";
 
-        _logger.LogInformation("Auth0 user authenticated: {Sub}", sub);
+        _logger.LogInformation("User authenticated: {Sub} via {Provider}", sub, authProvider);
 
         return Ok(new
         {
@@ -121,7 +127,8 @@ public class AuthController : ControllerBase
             email,
             name,
             picture,
-            authProvider = "Auth0",
+            role,
+            authProvider,
             authenticatedAt = DateTimeOffset.UtcNow
         });
     }
