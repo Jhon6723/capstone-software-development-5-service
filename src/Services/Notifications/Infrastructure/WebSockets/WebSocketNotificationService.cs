@@ -108,9 +108,7 @@ public class WebSocketNotificationService : IWebSocketNotificationService
             _logger.LogInformation("[SECURITY] WebSocket connection closed. UserId={UserId} IP={IP} TotalConnections={Total}",
                 userId, ipAddress, _connectionManager.GetConnectionCount());
 
-            if (webSocket.State == WebSocketState.Open ||
-                webSocket.State == WebSocketState.CloseReceived ||
-                webSocket.State == WebSocketState.CloseSent)
+            if (webSocket.State != WebSocketState.Closed)
             {
                 await webSocket.CloseAsync(
                     WebSocketCloseStatus.InternalServerError,
