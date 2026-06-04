@@ -41,7 +41,6 @@ class OpenAIProcessor(ImageProcessor):
         self._client = OpenAI(api_key=self._api_key)
 
         logger.info("OpenAI processor initialized (model=%s, quality=%s)", model, quality)
-
     
     @property
     def model_name(self) -> str:
