@@ -243,3 +243,16 @@ env/
 
 # AsyncAPI Generator HTML output (generated, do not commit)
 docs/asyncapi-html/
+
+# Python virtual environment for IA tests
+tests/ia_python_venv/
+
+# Python coverage reports
+tests/ia_python_tests/coverage.xml
+tests/ia_python_tests/htmlcov/
+tests/ia_python_tests/.pytest_cache/
+tests/ia_python_tests/__pycache__/
+tests/ia_python_tests/app/ 
+
+# Test results directory
+tests/TestResults/
