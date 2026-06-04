@@ -37,30 +37,32 @@ builder.Services.AddApplicationServices();
 // Register Infrastructure services (MongoDB, RabbitMQ)
 builder.Services.AddInfrastructureServices(builder.Configuration);
 
-// Configure JWT Authentication
+// Configure Dual Authentication (Auth0 + Local JWT)
 var jwtSecret = builder.Configuration["Jwt:Secret"] ?? throw new InvalidOperationException("JWT Secret not configured");
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? throw new InvalidOperationException("JWT Issuer not configured");
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? throw new InvalidOperationException("JWT Audience not configured");
+var auth0Domain = builder.Configuration["Auth0:Domain"] ?? throw new InvalidOperationException("Auth0 Domain not configured");
+var auth0Audience = builder.Configuration["Auth0:Audience"] ?? throw new InvalidOperationException("Auth0 Audience not configured");
 
 builder.Services.AddAuthentication(options =>
 {
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultAuthenticateScheme = "DualScheme";
+    options.DefaultChallengeScheme = "DualScheme";
 })
-.AddJwtBearer(options =>
+
+.AddJwtBearer("Auth0", options =>
 {
+    options.Authority = $"https://{auth0Domain}";
+    options.Audience = auth0Audience;
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuer = true,
+        ValidIssuer = $"https://{auth0Domain}/",
         ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-        ValidIssuer = jwtIssuer,
-        ValidAudience = jwtAudience,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret))
+        ValidAudience = auth0Audience,
+        ValidateLifetime = true
     };
 
-    // Enable JWT in WebSocket (from query string)
     options.Events = new JwtBearerEvents
     {
         OnMessageReceived = context =>
@@ -76,6 +78,63 @@ builder.Services.AddAuthentication(options =>
 
             return Task.CompletedTask;
         }
+    };
+})
+
+.AddJwtBearer("Local", options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = jwtIssuer,
+        ValidAudience = jwtAudience,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret))
+    };
+
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+
+            if (!string.IsNullOrEmpty(accessToken) &&
+                (path.StartsWithSegments("/api/websocket") || path.StartsWithSegments("/hubs")))
+            {
+                context.Token = accessToken;
+            }
+
+            return Task.CompletedTask;
+        }
+    };
+})
+
+.AddPolicyScheme("DualScheme", "Auth0 or Local JWT", options =>
+{
+    options.ForwardDefaultSelector = context =>
+    {
+        var authHeader = context.Request.Headers["Authorization"].FirstOrDefault();
+        string? token = null;
+
+        if (authHeader?.StartsWith("Bearer ") == true)
+            token = authHeader["Bearer ".Length..].Trim();
+        else
+            token = context.Request.Query["access_token"].FirstOrDefault();
+
+        if (token != null)
+        {
+            var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+            if (handler.CanReadToken(token))
+            {
+                var jwt = handler.ReadJwtToken(token);
+                if (jwt.Issuer.Contains(auth0Domain))
+                    return "Auth0";
+            }
+        }
+        return "Local";
     };
 });
 

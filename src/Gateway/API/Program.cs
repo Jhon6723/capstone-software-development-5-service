@@ -1,5 +1,7 @@
 // Load .env file if it exists (for local development without Docker)
 using API.Middleware;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 var envPath = Path.Combine(Directory.GetCurrentDirectory(), "../../../.env");
 if (File.Exists(envPath))
@@ -23,44 +25,107 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(optio
     options.MultipartHeadersLengthLimit = int.MaxValue;
 });
 
-// Configure JWT Authentication
+// Configure Dual Authentication (Auth0 + Local JWT)
 var jwtSecret = builder.Configuration["Jwt:Secret"] ?? throw new InvalidOperationException("JWT Secret not configured");
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? throw new InvalidOperationException("JWT Issuer not configured");
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? throw new InvalidOperationException("JWT Audience not configured");
+var auth0Domain = builder.Configuration["Auth0:Domain"]! ?? throw new InvalidOperationException("Auth0 Domain not configured");
+var auth0Audience = builder.Configuration["Auth0:Audience"]! ?? throw new InvalidOperationException("Auth0 Audience not configured");
 
-builder.Services.AddAuthentication(Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = "DualScheme";
+    options.DefaultChallengeScheme = "DualScheme";
+})
+
+.AddJwtBearer("Auth0", options =>
+{
+    options.Authority = $"https://{auth0Domain}";
+    options.Audience = auth0Audience;
+    options.TokenValidationParameters = new TokenValidationParameters
     {
-        options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+        ValidateIssuer = true,
+        ValidIssuer = $"https://{auth0Domain}/",
+        ValidateAudience = true,
+        ValidAudience = auth0Audience,
+        ValidateLifetime = true
+    };
+    
+    // Enable JWT authentication for WebSocket connections (from query string)
+    options.Events = new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerEvents
+    {
+        OnMessageReceived = context =>
         {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtIssuer,
-            ValidAudience = jwtAudience,
-            IssuerSigningKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(
-                System.Text.Encoding.UTF8.GetBytes(jwtSecret))
-        };
-        
-        // Enable JWT authentication for WebSocket connections (from query string)
-        options.Events = new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerEvents
-        {
-            OnMessageReceived = context =>
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+            
+            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/api/websocket"))
             {
-                var accessToken = context.Request.Query["access_token"];
-                var path = context.HttpContext.Request.Path;
-                
-                // If the request is for WebSocket and has token in query string, use it
-                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/api/websocket"))
-                {
-                    context.Token = accessToken;
-                }
-                
-                return Task.CompletedTask;
+                context.Token = accessToken;
             }
-        };
-    });
+            
+            return Task.CompletedTask;
+        }
+    };
+})
+
+.AddJwtBearer("Local", options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidIssuer = jwtIssuer,
+        ValidateAudience = true,
+        ValidAudience = jwtAudience,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(
+            Encoding.UTF8.GetBytes(jwtSecret))
+    };
+    
+    // Enable JWT authentication for WebSocket connections (from query string)
+    options.Events = new Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+            
+            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/api/websocket"))
+            {
+                context.Token = accessToken;
+            }
+            
+            return Task.CompletedTask;
+        }
+    };
+})
+
+.AddPolicyScheme("DualScheme", "Auth0 or Local JWT", options =>
+{
+    options.ForwardDefaultSelector = context =>
+    {
+        var authHeader = context.Request.Headers["Authorization"].FirstOrDefault();
+        string? token = null;
+
+        if (authHeader?.StartsWith("Bearer ") == true)
+            token = authHeader["Bearer ".Length..].Trim();
+        else
+            token = context.Request.Query["access_token"].FirstOrDefault();
+
+        if (token != null)
+        {
+            var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+            if (handler.CanReadToken(token))
+            {
+                var jwt = handler.ReadJwtToken(token);
+                if (jwt.Issuer.Contains(auth0Domain))
+                    return "Auth0";
+            }
+        }
+        return "Local";
+    };
+});
 
 builder.Services.AddAuthorization();
 

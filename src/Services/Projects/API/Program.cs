@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using System.Text;
 using PixPro.Services.Projects.Application;
 using PixPro.Services.Projects.Application.Interfaces;
 using PixPro.Services.Projects.Application.Services;
@@ -37,26 +39,68 @@ builder.Services.Configure<CloudinaryOptions>(
 builder.Services.AddScoped<IStorageService, CloudinaryStorageService>();
 builder.Services.AddApplicationServices();
 
-// Configure JWT Authentication
+// Configure Dual Authentication (Auth0 + Local JWT)
 var jwtSecret = builder.Configuration["Jwt:Secret"] ?? throw new InvalidOperationException("JWT Secret not configured");
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? throw new InvalidOperationException("JWT Issuer not configured");
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? throw new InvalidOperationException("JWT Audience not configured");
+var auth0Domain = builder.Configuration["Auth0:Domain"]! ?? throw new InvalidOperationException("Auth0 Domain not configured");
+var auth0Audience = builder.Configuration["Auth0:Audience"]! ?? throw new InvalidOperationException("Auth0 Audience not configured");
 
-builder.Services.AddAuthentication(Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = "DualScheme";
+    options.DefaultChallengeScheme = "DualScheme";
+})
+
+.AddJwtBearer("Auth0", options =>
+{
+    options.Authority = $"https://{auth0Domain}";
+    options.Audience = auth0Audience;
+    options.TokenValidationParameters = new TokenValidationParameters
     {
-        options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+        ValidateIssuer = true,
+        ValidIssuer = $"https://{auth0Domain}/",
+        ValidateAudience = true,
+        ValidAudience = auth0Audience,
+        ValidateLifetime = true
+    };
+})
+
+.AddJwtBearer("Local", options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidIssuer = jwtIssuer,
+        ValidateAudience = true,
+        ValidAudience = jwtAudience,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(
+            Encoding.UTF8.GetBytes(jwtSecret))
+    };
+})
+
+.AddPolicyScheme("DualScheme", "Auth0 or Local JWT", options =>
+{
+    options.ForwardDefaultSelector = context =>
+    {
+        var authHeader = context.Request.Headers["Authorization"].FirstOrDefault();
+        if (authHeader?.StartsWith("Bearer ") == true)
         {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtIssuer,
-            ValidAudience = jwtAudience,
-            IssuerSigningKey = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(
-                System.Text.Encoding.UTF8.GetBytes(jwtSecret))
-        };
-    });
+            var token = authHeader["Bearer ".Length..].Trim();
+            var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+            if (handler.CanReadToken(token))
+            {
+                var jwt = handler.ReadJwtToken(token);
+                var issuer = jwt.Issuer;
+                if (issuer.Contains(auth0Domain))
+                    return "Auth0";
+            }
+        }
+        return "Local";
+    };
+});
 
 builder.Services.AddAuthorization();
 

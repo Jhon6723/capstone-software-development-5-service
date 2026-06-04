@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using PixPro.Services.Notifications.API.Helpers;
 using PixPro.Services.Notifications.Infrastructure.WebSockets;
 
 namespace PixPro.Services.Notifications.API.Controllers;
@@ -48,7 +49,7 @@ public class WebSocketController : ControllerBase
             return;
         }
 
-        var userId = userIdClaim.Value;
+        var userId = UserIdHelper.DeriveUserId(userIdClaim.Value);
 
         // Check connection limits
         if (!_connectionManager.CanConnect(ipAddress))

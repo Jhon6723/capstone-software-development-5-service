@@ -20,16 +20,6 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Configuration["ConnectionStrings:AuthDb"] =
     Environment.GetEnvironmentVariable("AUTH_DB_CONNECTION") ?? "";
-builder.Configuration["Auth0:Domain"] =
-    Environment.GetEnvironmentVariable("AUTH0_DOMAIN") ?? "";
-builder.Configuration["Auth0:Audience"] =
-    Environment.GetEnvironmentVariable("AUTH0_AUDIENCE") ?? "";
-builder.Configuration["Jwt:Secret"] =
-    Environment.GetEnvironmentVariable("JWT_SECRET") ?? "";
-builder.Configuration["Jwt:Issuer"] =
-    Environment.GetEnvironmentVariable("JWT_ISSUER") ?? "";
-builder.Configuration["Jwt:Audience"] =
-    Environment.GetEnvironmentVariable("JWT_AUDIENCE") ?? "";
 builder.Configuration["Jwt:ExpirationMinutes"] =
     Environment.GetEnvironmentVariable("JWT_EXPIRATION_MINUTES") ?? "60";
 
@@ -46,11 +36,11 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 // Register Application services
 builder.Services.AddApplicationServices();
 
-var auth0Domain = builder.Configuration["Auth0:Domain"]!;
-var auth0Audience = builder.Configuration["Auth0:Audience"]!;
-var jwtSecret = builder.Configuration["Jwt:Secret"]!;
-var jwtIssuer = builder.Configuration["Jwt:Issuer"]!;
-var jwtAudience = builder.Configuration["Jwt:Audience"]!;
+var auth0Domain = builder.Configuration["Auth0:Domain"]! ?? throw new InvalidOperationException("Auth0 Domain not configured");
+var auth0Audience = builder.Configuration["Auth0:Audience"]! ?? throw new InvalidOperationException("Auth0 Audience not configured");
+var jwtSecret = builder.Configuration["Jwt:Secret"]! ?? throw new InvalidOperationException("JWT Secret not configured");
+var jwtIssuer = builder.Configuration["Jwt:Issuer"]! ?? throw new InvalidOperationException("JWT Issuer not configured");
+var jwtAudience = builder.Configuration["Jwt:Audience"]! ?? throw new InvalidOperationException("JWT Audience not configured");
 
 builder.Services.AddAuthentication(options =>
 {

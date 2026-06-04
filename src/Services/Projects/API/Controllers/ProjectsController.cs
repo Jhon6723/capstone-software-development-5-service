@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using PixPro.Services.Projects.API.Helpers;
 using PixPro.Services.Projects.Application.DTOs.Requests;
 using PixPro.Services.Projects.Application.Services;
 using System.Security.Claims;
@@ -32,8 +33,7 @@ public class ProjectsController : ControllerBase
         if (ownerIdClaim == null)
             return Unauthorized(new { error = "Invalid token: user ID not found." });
 
-        if (!Guid.TryParse(ownerIdClaim.Value, out var ownerId))
-            return BadRequest(new { error = "Invalid user ID format." });
+        var ownerId = UserIdHelper.DeriveGuid(ownerIdClaim.Value);
 
         var result = await _projectService.GetProjectsAsync(ownerId, search, cancellationToken);
 
@@ -83,8 +83,7 @@ public class ProjectsController : ControllerBase
         if (ownerIdClaim == null)
             return Unauthorized(new { error = "Invalid token: user ID not found." });
 
-        if (!Guid.TryParse(ownerIdClaim.Value, out var ownerId))
-            return BadRequest(new { error = "Invalid user ID format." });
+        var ownerId = UserIdHelper.DeriveGuid(ownerIdClaim.Value);
 
         var result = await _projectService.CreateProjectAsync(ownerId, request, cancellationToken);
 

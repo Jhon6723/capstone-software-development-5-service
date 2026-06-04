@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using PixPro.Services.Projects.API.Helpers;
 using PixPro.Services.Projects.Application.DTOs.Requests;
 using PixPro.Services.Projects.Application.IntegrationEvents;
 using PixPro.Services.Projects.Application.Services;
@@ -39,8 +40,7 @@ public class ImagesController : ControllerBase
         if (ownerIdClaim == null)
             return Unauthorized(new { error = "Invalid token: user ID not found." });
 
-        if (!Guid.TryParse(ownerIdClaim.Value, out var ownerId))
-            return BadRequest(new { error = "Invalid user ID format." });
+        var ownerId = UserIdHelper.DeriveGuid(ownerIdClaim.Value);
 
         if (projectId == Guid.Empty)
             return BadRequest(new { error = "ProjectId is required." });
