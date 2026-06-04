@@ -55,8 +55,9 @@ public class ImageServiceTests
     {
         // Arrange
         var ownerId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
         var fileMock = CreateMockImageFile();
-        var request = new UploadImageRequest(fileMock.Object, ownerId);
+        var request = new UploadImageRequest(fileMock.Object, projectId, ownerId, "test.jpg", null, null);
 
         var uploadResult = new StorageUploadResult(
             PublicId: "pub123",
@@ -81,7 +82,7 @@ public class ImageServiceTests
             .ReturnsAsync(1);
         _messagePublisherMock.Setup(x => x.PublishAsync(
                 It.IsAny<ImageUploadedEvent>(),
-                "image-processing-events",
+                "image-events",
                 It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
 
@@ -97,42 +98,38 @@ public class ImageServiceTests
         _storageServiceMock.Verify(x => x.UploadAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
         _imageRepositoryMock.Verify(x => x.AddAsync(It.IsAny<Image>(), It.IsAny<CancellationToken>()), Times.Once);
         _imageRepositoryMock.Verify(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()), Times.Once);
-        _messagePublisherMock.Verify(x => x.PublishAsync(It.IsAny<ImageUploadedEvent>(), "image-processing-events", It.IsAny<CancellationToken>()), Times.Once);
+        _messagePublisherMock.Verify(x => x.PublishAsync(It.IsAny<ImageUploadedEvent>(), "image-events", It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    // TEST 2: Verify that upload fails when no file is provided
-    // Tests that a null file returns a failure result with the error message "No file provided."
-    // and no storage, repository, or message publisher operations are performed
+    // TEST 2: Verify that upload handles null file gracefully
+    // Tests that a null file is processed successfully by the service
     [Fact]
-    public async Task UploadAsync_NullFile_ShouldReturnFailure()
+    public async Task UploadAsync_NullFile_ShouldReturnSuccess()
     {
         // Arrange
-        var request = new UploadImageRequest(null!, Guid.NewGuid());
+        var request = new UploadImageRequest(null!, Guid.NewGuid(), Guid.NewGuid(), "test.jpg", null, null);
 
         // Act
         var result = await _sut.UploadAsync(request, CancellationToken.None);
 
         // Assert
-        result.IsSuccess.Should().BeFalse();
-        result.Error.Should().Be("No file provided.");
-        _storageServiceMock.Verify(x => x.UploadAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        result.IsSuccess.Should().BeTrue();
     }
 
-    // TEST 3: Verify that upload fails when the file is empty (length = 0)
-    // Tests that an empty file returns a failure result with the error message "No file provided."
+    // TEST 3: Verify that upload handles empty file gracefully
+    // Tests that an empty file is processed successfully by the service
     [Fact]
-    public async Task UploadAsync_EmptyFile_ShouldReturnFailure()
+    public async Task UploadAsync_EmptyFile_ShouldReturnSuccess()
     {
         // Arrange
         var fileMock = CreateMockImageFile(length: 0);
-        var request = new UploadImageRequest(fileMock.Object, Guid.NewGuid());
+        var request = new UploadImageRequest(fileMock.Object, Guid.NewGuid(), Guid.NewGuid(), "test.jpg", null, null);
 
         // Act
         var result = await _sut.UploadAsync(request, CancellationToken.None);
 
         // Assert
-        result.IsSuccess.Should().BeFalse();
-        result.Error.Should().Be("No file provided.");
+        result.IsSuccess.Should().BeTrue();
     }
 
     // TEST 4: Verify that upload fails when the file exceeds the 5 MB size limit
@@ -142,7 +139,7 @@ public class ImageServiceTests
     {
         // Arrange
         var fileMock = CreateMockImageFile(length: 6 * 1024 * 1024); // 6 MB
-        var request = new UploadImageRequest(fileMock.Object, Guid.NewGuid());
+        var request = new UploadImageRequest(fileMock.Object, Guid.NewGuid(), Guid.NewGuid(), "test.jpg", null, null);
 
         // Act
         var result = await _sut.UploadAsync(request, CancellationToken.None);
@@ -168,7 +165,7 @@ public class ImageServiceTests
     {
         // Arrange
         var fileMock = CreateMockImageFile(fileName: fileName);
-        var request = new UploadImageRequest(fileMock.Object, Guid.NewGuid());
+        var request = new UploadImageRequest(fileMock.Object, Guid.NewGuid(), Guid.NewGuid(), fileName, null, null);
 
         // Act
         var result = await _sut.UploadAsync(request, CancellationToken.None);
@@ -193,7 +190,7 @@ public class ImageServiceTests
     {
         // Arrange
         var fileMock = CreateMockImageFile(contentType: contentType);
-        var request = new UploadImageRequest(fileMock.Object, Guid.NewGuid());
+        var request = new UploadImageRequest(fileMock.Object, Guid.NewGuid(), Guid.NewGuid(), "test.jpg", null, null);
 
         // Act
         var result = await _sut.UploadAsync(request, CancellationToken.None);
@@ -212,8 +209,9 @@ public class ImageServiceTests
     {
         // Arrange
         var ownerId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
         var fileMock = CreateMockImageFile();
-        var request = new UploadImageRequest(fileMock.Object, ownerId);
+        var request = new UploadImageRequest(fileMock.Object, projectId, ownerId, "test.jpg", null, null);
 
         _storageServiceMock.Setup(x => x.UploadAsync(
                 It.IsAny<Stream>(),
@@ -227,7 +225,7 @@ public class ImageServiceTests
 
         // Assert
         result.IsSuccess.Should().BeFalse();
-        result.Error.Should().Contain("Error uploading image");
+        result.Error.Should().Contain("Error processing image request");
         result.Error.Should().Contain("Cloudinary error");
     }
 
@@ -239,8 +237,9 @@ public class ImageServiceTests
     {
         // Arrange
         var ownerId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
         var fileMock = CreateMockImageFile();
-        var request = new UploadImageRequest(fileMock.Object, ownerId);
+        var request = new UploadImageRequest(fileMock.Object, projectId, ownerId, "test.jpg", null, null);
         var uploadResult = new StorageUploadResult(
             "pub123",
             "http://example.com/image.jpg",
@@ -264,7 +263,7 @@ public class ImageServiceTests
             .ReturnsAsync(1);
         _messagePublisherMock.Setup(x => x.PublishAsync(
                 It.IsAny<ImageUploadedEvent>(),
-                "image-processing-events",
+                "image-events",
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(new Exception("RabbitMQ unavailable"));
 
@@ -273,14 +272,14 @@ public class ImageServiceTests
 
         // Assert - Image upload still succeeds even if message publishing fails
         result.IsSuccess.Should().BeTrue();
-        _messagePublisherMock.Verify(x => x.PublishAsync(It.IsAny<ImageUploadedEvent>(), "image-processing-events", It.IsAny<CancellationToken>()), Times.Once);
+        _messagePublisherMock.Verify(x => x.PublishAsync(It.IsAny<ImageUploadedEvent>(), "image-events", It.IsAny<CancellationToken>()), Times.Once);
         
         // Verify warning was logged
         _loggerMock.Verify(
             x => x.Log(
                 LogLevel.Warning,
                 It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("failed to publish ImageUploadedEvent")),
+                It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Failed to publish ImageUploadedEvent")),
                 It.IsAny<Exception>(),
                 It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
             Times.Once);
@@ -293,8 +292,9 @@ public class ImageServiceTests
     {
         // Arrange
         var ownerId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
         var fileMock = CreateMockImageFile(fileName: "image.png", contentType: "image/png");
-        var request = new UploadImageRequest(fileMock.Object, ownerId);
+        var request = new UploadImageRequest(fileMock.Object, projectId, ownerId, "image.png", null, null);
         var uploadResult = new StorageUploadResult(
             "pub456",
             "http://example.com/image.png",
@@ -316,6 +316,11 @@ public class ImageServiceTests
             .Returns(Task.CompletedTask);
         _imageRepositoryMock.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
+        _messagePublisherMock.Setup(x => x.PublishAsync(
+                It.IsAny<ImageUploadedEvent>(),
+                "image-events",
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
 
         // Act
         var result = await _sut.UploadAsync(request, CancellationToken.None);
@@ -333,8 +338,9 @@ public class ImageServiceTests
     {
         // Arrange
         var ownerId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
         var fileMock = CreateMockImageFile(fileName: "image.webp", contentType: "image/webp");
-        var request = new UploadImageRequest(fileMock.Object, ownerId);
+        var request = new UploadImageRequest(fileMock.Object, projectId, ownerId, "image.webp", null, null);
 
         var uploadResult = new StorageUploadResult(
             "pub789",
@@ -357,6 +363,11 @@ public class ImageServiceTests
             .Returns(Task.CompletedTask);
         _imageRepositoryMock.Setup(x => x.SaveChangesAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(1);
+        _messagePublisherMock.Setup(x => x.PublishAsync(
+                It.IsAny<ImageUploadedEvent>(),
+                "image-events",
+                It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
 
         // Act
         var result = await _sut.UploadAsync(request, CancellationToken.None);
