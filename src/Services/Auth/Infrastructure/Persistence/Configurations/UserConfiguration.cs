@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using PixPro.Services.Auth.Domain.Entities;
+using PixPro.Services.Auth.Domain.Enums;
 
 namespace PixPro.Services.Auth.Infrastructure.Persistence.Configurations;
 
@@ -31,6 +32,12 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
             .HasColumnName("Password")
             .HasColumnType("text")
             .IsRequired();
+
+        builder.Property(u => u.Role)
+            .HasColumnName("role")
+            .HasColumnType("int")
+            .IsRequired()
+            .HasDefaultValue(UserRole.User);
 
         builder.Property(u => u.CreatedAt)
             .HasColumnName("created_at")

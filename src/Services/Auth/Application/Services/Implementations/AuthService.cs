@@ -170,7 +170,7 @@ public sealed class AuthService : IAuthService
             }
 
             // Generate JWT token
-            var token = _jwtTokenGenerator.GenerateToken(user.Id, user.Email);
+            var token = _jwtTokenGenerator.GenerateToken(user.Id, user.Email, user.Role.ToString());
 
             // Create response
             var response = new LoginResponse
