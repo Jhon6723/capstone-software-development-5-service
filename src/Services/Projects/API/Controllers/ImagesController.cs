@@ -15,10 +15,12 @@ namespace PixPro.Services.Projects.API.Controllers;
 public class ImagesController : ControllerBase
 {
     private readonly IImageService _imageService;
+    private readonly ICreditService _creditService;
 
-    public ImagesController(IImageService imageService)
+    public ImagesController(IImageService imageService, ICreditService creditService)
     {
         _imageService = imageService;
+        _creditService = creditService;
     }
 
     [HttpPost("upload")]
@@ -26,6 +28,7 @@ public class ImagesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status402PaymentRequired)]
     public async Task<IActionResult> Upload(
         IFormFile? file,
         [FromForm] string prompt,
@@ -41,6 +44,7 @@ public class ImagesController : ControllerBase
             return Unauthorized(new { error = "Invalid token: user ID not found." });
 
         var ownerId = UserIdHelper.DeriveGuid(ownerIdClaim.Value);
+        var isAdmin = User.IsInRole("Admin");
 
         if (projectId == Guid.Empty)
             return BadRequest(new { error = "ProjectId is required." });
@@ -79,11 +83,16 @@ public class ImagesController : ControllerBase
         }
         // Generator mode (text-to-image) with Feature=0: file is optional
 
-        var request = new UploadImageRequest(file, ownerId, projectId, prompt, processingFeature, processingParams);
+        var request = new UploadImageRequest(file, ownerId, projectId, prompt, processingFeature, processingParams, isAdmin);
         var result = await _imageService.UploadAsync(request, cancellationToken);
 
         if (!result.IsSuccess)
+        {
+            if (result.Error == "INSUFFICIENT_CREDITS")
+                return StatusCode(StatusCodes.Status402PaymentRequired, new { error = result.Error });
+
             return BadRequest(new { error = result.Error });
+        }
 
         return StatusCode(StatusCodes.Status201Created, result.Value);
     }

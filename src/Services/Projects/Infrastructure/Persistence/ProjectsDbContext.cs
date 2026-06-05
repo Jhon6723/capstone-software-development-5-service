@@ -7,6 +7,7 @@ public sealed class ProjectsDbContext(DbContextOptions<ProjectsDbContext> option
 {
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<Image> Images => Set<Image>();
+    public DbSet<UserCredit> UserCredits => Set<UserCredit>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

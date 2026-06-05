@@ -31,6 +31,7 @@ builder.Services.AddDbContext<ProjectsDbContext>(options =>
 
 builder.Services.AddScoped<IProjectRepository, ProjectRepository>();
 builder.Services.AddScoped<IImageRepository, ImageRepository>();
+builder.Services.AddScoped<IUserCreditRepository, UserCreditRepository>();
 builder.Services.AddSingleton<IMessagePublisher, RabbitMqMessagePublisher>();
 builder.Services.AddHostedService<ProcessedImageEventConsumer>();
 builder.Services.Configure<CloudinaryOptions>(

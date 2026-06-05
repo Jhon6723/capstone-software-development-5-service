@@ -9,5 +9,6 @@ public record UploadImageRequest(
     Guid ProjectId,
     string Prompt,
     ProcessingFeature? Feature = null,  // Optional: 0=Generator, 1=Editor. Auto-detected if null.
-    ProcessingParameters? Parameters = null
+    ProcessingParameters? Parameters = null,
+    bool IsAdmin = false
 );

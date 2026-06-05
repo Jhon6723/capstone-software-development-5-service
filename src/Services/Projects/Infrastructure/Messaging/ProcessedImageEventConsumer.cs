@@ -6,7 +6,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using PixPro.Services.Projects.Application.IntegrationEvents;
+using PixPro.Services.Projects.Application.Services;
 using PixPro.Services.Projects.Domain.Entities;
+using PixPro.Services.Projects.Domain.Enums;
 using PixPro.Services.Projects.Domain.Repositories;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
@@ -108,57 +110,94 @@ public class ProcessedImageEventConsumer : BackgroundService
 
             try
             {
-                var eventData = JsonSerializer.Deserialize<ImageProcessingCompletedEvent>(json);
+                using var doc = JsonDocument.Parse(json);
+                var isFailed = doc.RootElement.TryGetProperty("ErrorCode", out _);
 
-                if (eventData != null)
+                if (isFailed)
                 {
-                    _logger.LogInformation(
-                        "Received processed image event for ImageId: {ImageId}, ProjectId: {ProjectId}",
-                        eventData.ImageId,
-                        eventData.ProjectId);
-
-                    _ = Task.Run(async () =>
+                    var failedEvent = JsonSerializer.Deserialize<ImageProcessingFailedEvent>(json);
+                    if (failedEvent != null)
                     {
-                        try
-                        {
-                            using var scope = _serviceProvider.CreateScope();
-                            var imageRepository = scope.ServiceProvider.GetRequiredService<IImageRepository>();
+                        _logger.LogWarning(
+                            "Processing failed for ImageId: {ImageId}, ErrorCode: {ErrorCode}",
+                            failedEvent.ImageId, failedEvent.ErrorCode);
 
-                            // Save each processed image URL as a new Image entity
-                            if (eventData.ProcessedImageUrls != null)
+                        _ = Task.Run(async () =>
+                        {
+                            try
                             {
-                                var originalImageId = Guid.Parse(eventData.ImageId);
-                                var originalImage = await imageRepository.GetByIdAsync(originalImageId);
-                                
-                                // If original image exists (Feature 1 - Editor), reference it
-                                // If not (Feature 0 - Generator), use null
-                                var referenceId = originalImage != null ? originalImageId : (Guid?)null;
-
-                                foreach (var processedUrl in eventData.ProcessedImageUrls)
+                                if (failedEvent.ErrorCode != "CONTENT_MODERATION_VIOLATION"
+                                    && Guid.TryParse(failedEvent.UserId, out var userId)
+                                    && failedEvent.ModelUsed is not null
+                                    && ModelTierFromString(failedEvent.ModelUsed) is ModelTier modelTier)
                                 {
-                                    var processedImage = Image.CreateProcessedImage(
-                                        referenceId,  // Real ID if exists, null for generated images
-                                        Guid.Parse(eventData.ProjectId),
-                                        Guid.Parse(eventData.UserId),
-                                        processedUrl,
-                                        "processed");
+                                    using var scope = _serviceProvider.CreateScope();
+                                    var creditService = scope.ServiceProvider.GetRequiredService<ICreditService>();
+                                    await creditService.RefundCreditAsync(userId, modelTier);
 
-                                    await imageRepository.AddAsync(processedImage);
+                                    _logger.LogInformation(
+                                        "Refunded credit for UserId: {UserId}, ModelTier: {ModelTier}",
+                                        userId, modelTier);
                                 }
-
-                                await imageRepository.SaveChangesAsync();
-
-                                _logger.LogInformation(
-                                    "Saved {Count} processed images for original ImageId: {ImageId}",
-                                    eventData.ProcessedImageUrls.Count,
-                                    eventData.ImageId);
                             }
-                        }
-                        catch (Exception ex)
+                            catch (Exception ex)
+                            {
+                                _logger.LogError(ex, "Error refunding credit for ImageId: {ImageId}", failedEvent.ImageId);
+                            }
+                        });
+                    }
+                }
+                else
+                {
+                    var eventData = JsonSerializer.Deserialize<ImageProcessingCompletedEvent>(json);
+
+                    if (eventData != null)
+                    {
+                        _logger.LogInformation(
+                            "Received processed image event for ImageId: {ImageId}, ProjectId: {ProjectId}",
+                            eventData.ImageId,
+                            eventData.ProjectId);
+
+                        _ = Task.Run(async () =>
                         {
-                            _logger.LogError(ex, "Error saving processed images for ImageId: {ImageId}", eventData.ImageId);
-                        }
-                    });
+                            try
+                            {
+                                using var scope = _serviceProvider.CreateScope();
+                                var imageRepository = scope.ServiceProvider.GetRequiredService<IImageRepository>();
+
+                                if (eventData.ProcessedImageUrls != null)
+                                {
+                                    var originalImageId = Guid.Parse(eventData.ImageId);
+                                    var originalImage = await imageRepository.GetByIdAsync(originalImageId);
+
+                                    var referenceId = originalImage != null ? originalImageId : (Guid?)null;
+
+                                    foreach (var processedUrl in eventData.ProcessedImageUrls)
+                                    {
+                                        var processedImage = Image.CreateProcessedImage(
+                                            referenceId,
+                                            Guid.Parse(eventData.ProjectId),
+                                            Guid.Parse(eventData.UserId),
+                                            processedUrl,
+                                            "processed");
+
+                                        await imageRepository.AddAsync(processedImage);
+                                    }
+
+                                    await imageRepository.SaveChangesAsync();
+
+                                    _logger.LogInformation(
+                                        "Saved {Count} processed images for original ImageId: {ImageId}",
+                                        eventData.ProcessedImageUrls.Count,
+                                        eventData.ImageId);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogError(ex, "Error saving processed images for ImageId: {ImageId}", eventData.ImageId);
+                            }
+                        });
+                    }
                 }
 
                 _channel?.BasicAck(ea.DeliveryTag, false);
@@ -174,6 +213,14 @@ public class ProcessedImageEventConsumer : BackgroundService
 
         _logger.LogInformation("Started consuming from queue '{QueueName}'", queueName);
     }
+
+    private static ModelTier? ModelTierFromString(string model) => model switch
+    {
+        "gpt-image-1-mini-low"  => ModelTier.GptMiniLow,
+        "gpt-image-1-mini-high" => ModelTier.GptMiniHigh,
+        "kontext"               => ModelTier.Kontext,
+        _                       => null
+    };
 
     public override void Dispose()
     {

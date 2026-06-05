@@ -5,6 +5,7 @@ using PixPro.Services.Projects.Application.DTOs.Responses;
 using PixPro.Services.Projects.Application.IntegrationEvents;
 using PixPro.Services.Projects.Application.Interfaces;
 using PixPro.Services.Projects.Domain.Entities;
+using PixPro.Services.Projects.Domain.Enums;
 using PixPro.Services.Projects.Domain.Repositories;
 
 namespace PixPro.Services.Projects.Application.Services;
@@ -15,6 +16,7 @@ public class ImageService : IImageService
     private readonly IStorageService _storageService;
     private readonly ILogger<ImageService> _logger;
     private readonly IMessagePublisher _messagePublisher;
+    private readonly ICreditService _creditService;
 
     private static readonly HashSet<string> AllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -28,16 +30,26 @@ public class ImageService : IImageService
 
     private const long MaxFileSizeBytes = 5 * 1024 * 1024;
 
+    private static readonly IReadOnlyDictionary<string, ModelTier> ModelTierMap =
+        new Dictionary<string, ModelTier>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "gpt-image-1-mini-low",  ModelTier.GptMiniLow  },
+            { "gpt-image-1-mini-high", ModelTier.GptMiniHigh },
+            { "kontext",               ModelTier.Kontext      }
+        };
+
     public ImageService(
         IImageRepository imageRepository,
         IStorageService storageService,
         ILogger<ImageService> logger,
-        IMessagePublisher messagePublisher)
+        IMessagePublisher messagePublisher,
+        ICreditService creditService)
     {
         _imageRepository = imageRepository;
         _storageService = storageService;
         _logger = logger;
         _messagePublisher = messagePublisher;
+        _creditService = creditService;
     }
 
     public async Task<Result<ImageUploadResponse>> UploadAsync(
@@ -46,6 +58,16 @@ public class ImageService : IImageService
     {
         try
         {
+            // Credit check for non-admin users on img2img models
+            if (!request.IsAdmin && request.Parameters is not null
+                && ModelTierMap.TryGetValue(request.Parameters.Model, out var modelTier))
+            {
+                var deductResult = await _creditService.TryDeductCreditAsync(
+                    request.OwnerId, modelTier, cancellationToken);
+
+                if (!deductResult.IsSuccess)
+                    return Result<ImageUploadResponse>.Failure(deductResult.Error);
+            }
             var file = request.File;
             string? imageUrl = null;
             Image? image = null;

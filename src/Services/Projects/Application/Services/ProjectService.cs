@@ -39,7 +39,6 @@ public class ProjectService : IProjectService
             {
                 Id = project.Id.ToString(),
                 Name = project.Name,
-                OwnerId = project.OwnerId.ToString(),
                 CreatedAt = project.CreatedAt,
                 ImageCount = imageCount
             });
@@ -69,7 +68,6 @@ public class ProjectService : IProjectService
         {
             Id = project.Id.ToString(),
             Name = project.Name,
-            OwnerId = project.OwnerId.ToString(),
             CreatedAt = project.CreatedAt,
             ImageCount = imageCount
         };
@@ -94,7 +92,6 @@ public class ProjectService : IProjectService
         {
             Id = project.Id.ToString(),
             Name = project.Name,
-            OwnerId = project.OwnerId.ToString(),
             CreatedAt = project.CreatedAt,
             ImageCount = 0
         };
