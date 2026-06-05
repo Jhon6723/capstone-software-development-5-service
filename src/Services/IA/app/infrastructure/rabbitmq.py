@@ -259,6 +259,7 @@ class RabbitMqConsumer:
                 ErrorMessage=error_message,
                 ErrorCode="CONTENT_MODERATION_VIOLATION",
                 FailedAt=datetime.now(timezone.utc),
+                ModelUsed=event.Parameters.model if event.Parameters else None,
             )
 
             self._publisher.publish(
@@ -287,6 +288,7 @@ class RabbitMqConsumer:
                 ErrorMessage=str(proc_ex),
                 ErrorCode="PROCESSING_ERROR",
                 FailedAt=datetime.now(timezone.utc),
+                ModelUsed=event.Parameters.model if event.Parameters else None,
             )
             
             self._publisher.publish(

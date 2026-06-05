@@ -79,3 +79,4 @@ class ImageProcessingFailedEvent(BaseModel):
     ErrorMessage: str
     ErrorCode: str
     FailedAt: datetime
+    ModelUsed: Optional[str] = Field(default=None)
