@@ -162,6 +162,143 @@ class ModelTier(Enum):
 The user can explicitly select a tier via the `model` parameter in the upload event. If no model is specified, the system uses **`gpt-image-1-mini-low`** — the cheapest reliable option, paid for on the existing OpenAI account.
 
 
+## **Credit System Architecture**
+
+### **Overview**
+
+Users start on a **Free tier** with a fixed number of credits per model. Each credit = 1 image generation. Admins have unlimited attempts. Subscriptions (future) grant a larger monthly credit pool per tier.
+
+Credit enforcement lives in the **Projects Service** — it acts as the gate *before* publishing to RabbitMQ. The IA Service stays purely a processing worker with no billing awareness.
+
+### **Free Tier Credit Allocation**
+
+| Model | Free Credits | Credits per Image | Notes |
+|-------|-------------|-------------------|-------|
+| `gpt-image-1-mini-low` | **5** | 1 | Cheapest img2img option |
+| `kontext` (Pollinations) | **3** | 1 | Standard quality |
+| `gpt-image-1-mini-high` | **1** | 1 | Premium quality |
+| `flux-schnell` (Pixazo) | **Unlimited** | — | Text-to-image, cheapest tier, no credit gate |
+
+### **Subscription Tiers (Future)**
+
+Subscriptions expand the monthly credit pool. Exact pricing TBD.
+
+| Tier | `gpt-image-1-mini-low` | `kontext` | `gpt-image-1-mini-high` | Reset |
+|------|------------------------|-----------|--------------------------|-------|
+| **Free** | 5 total | 3 total | 1 total | Never (one-time grant) |
+| **Basic** | N / month | N / month | N / month | Monthly |
+| **Pro** | N / month | N / month | N / month | Monthly |
+| **Unlimited** | ∞ | ∞ | ∞ | — |
+
+> `N` values to be defined when subscription pricing is established.
+
+### **Admin Role**
+
+Admins bypass all credit checks entirely — no deduction, no limit on any model.
+
+### **Database Table: `user_credits`**
+
+Owned by the **Projects Service** database (same DB that holds User → Project relationships).
+
+```sql
+user_credits
+├── id                UUID          PRIMARY KEY
+├── user_id           UUID          NOT NULL  FK → users.id
+├── model_tier        ENUM          NOT NULL  (gpt_mini_low | kontext | gpt_mini_high)
+├── credits_remaining INT           NOT NULL  DEFAULT 0
+├── credits_total     INT           NOT NULL  DEFAULT 0   -- max for current subscription period
+├── subscription_tier ENUM          NOT NULL  DEFAULT 'free'  (free | basic | pro | unlimited)
+├── reset_at          TIMESTAMPTZ   NULLABLE  -- NULL for free tier, monthly date for subscriptions
+└── updated_at        TIMESTAMPTZ   NOT NULL  DEFAULT now()
+```
+
+**Indexes:**
+- `UNIQUE (user_id, model_tier)` — one row per user per model tier
+- `INDEX (user_id)` — fast credit lookup per user
+
+### **Credit Check Gate (Projects Service)**
+
+The credit check happens **before** publishing to RabbitMQ. No message is sent if the user has insufficient credits.
+
+```
+HTTP Request → Projects Service
+  1. Identify user role
+     ├─ Admin → skip all credit logic → publish event
+     └─ Regular user → continue
+  2. Identify model_tier from request parameters
+     ├─ flux-schnell → skip credit check (unlimited) → publish event
+     └─ gpt_mini_low | kontext | gpt_mini_high → continue
+  3. SELECT credits_remaining FROM user_credits
+     WHERE user_id = ? AND model_tier = ?
+     ├─ credits_remaining = 0 → return 402 INSUFFICIENT_CREDITS
+     └─ credits_remaining > 0 → continue
+  4. Atomically decrement: UPDATE user_credits
+     SET credits_remaining = credits_remaining - 1
+     WHERE user_id = ? AND model_tier = ? AND credits_remaining > 0
+     ├─ 0 rows affected (race condition) → return 402 INSUFFICIENT_CREDITS
+     └─ 1 row affected → publish ImageUploadedEvent to RabbitMQ
+  5. If IA Service returns ImageProcessingFailedEvent
+     → Refund: UPDATE user_credits SET credits_remaining = credits_remaining + 1
+```
+
+### **Credit Refund on AI Failure**
+
+When the IA Service publishes `ImageProcessingFailedEvent`, the Projects Service consumes it and **refunds 1 credit** to the user for the model tier used. This ensures users are not penalized for provider-side errors.
+
+Refund applies to all error codes **except** `CONTENT_MODERATION_VIOLATION` — if the user submitted blocked content, the credit is consumed (intentional abuse deterrent).
+
+| Error Code | Credit Refunded? |
+|------------|-----------------|
+| `CONTENT_MODERATION_VIOLATION` | ❌ No |
+| `MODEL_NOT_FOUND` | ✅ Yes |
+| `PROCESSING_ERROR` | ✅ Yes |
+| `UPLOAD_ERROR` | ✅ Yes |
+
+### **New Error Codes**
+
+Added to the Projects Service HTTP layer:
+
+| Code | HTTP Status | Description |
+|------|-------------|-------------|
+| `INSUFFICIENT_CREDITS` | 402 | User has 0 credits remaining for the requested model tier |
+
+### **Credit System Flow**
+
+```mermaid
+flowchart TD
+    A[User Request: POST /api/projects] --> B{Is Admin?}
+    B -->|Yes| G[Skip credit check]
+    B -->|No| C{model = flux-schnell?}
+    C -->|Yes| G
+    C -->|No| D[Query user_credits table]
+    D --> E{credits_remaining > 0?}
+    E -->|No| F[Return 402 INSUFFICIENT_CREDITS]
+    E -->|Yes| H[Atomic decrement credits_remaining]
+    H --> I{Decrement succeeded?}
+    I -->|No - race condition| F
+    I -->|Yes| G
+    G --> J[Publish ImageUploadedEvent to RabbitMQ]
+    J --> K[IA Service processes image]
+    K --> L{Processing result?}
+    L -->|ImageProcessingCompletedEvent| M[Done - credit consumed]
+    L -->|ImageProcessingFailedEvent| N{ErrorCode?}
+    N -->|CONTENT_MODERATION_VIOLATION| O[Credit NOT refunded]
+    N -->|Other errors| P[Refund 1 credit to user]
+```
+
+### **Architecture Placement Summary**
+
+| Concern | Service | Layer |
+|---------|---------|-------|
+| Credit balance storage | Projects Service DB | `user_credits` table |
+| Credit check & deduction | Projects Service | Business logic (before RabbitMQ publish) |
+| Credit refund on failure | Projects Service | Consumes `ImageProcessingFailedEvent` |
+| Subscription tier tracking | Projects Service DB | `user_credits.subscription_tier` |
+| Admin bypass | Projects Service | Role check in request handler |
+| IA Service | **No awareness of credits** | Pure processing worker |
+
+---
+
 ## **System Flows (Mermaid Diagrams)**
 
 ### **1. Text-to-Image vs Image-to-Image Flow Comparison**
@@ -814,6 +951,151 @@ strength=0.2          strength=0.5          strength=0.9
 | `gpt-image-1-mini-low` | Everyday image editing | Image → Image | ⭐ Cheapest | ⭐⭐⭐⭐ |
 | `kontext` | High-quality instruction editing | Image → Image | 💰💰 Medium | ⭐⭐⭐⭐⭐ |
 | `gpt-image-1-mini-high` | Complex reasoning edits | Image → Image | 💰💰💰 Premium | ⭐⭐⭐⭐⭐ |
+
+---
+
+## **Credit System Diagrams**
+
+### **1. Credit System — Request Flow (with all bypass rules)**
+
+Full flow from an HTTP request through credit check, deduction, and the RabbitMQ publish gate.
+
+```mermaid
+flowchart TD
+    A([HTTP POST /api/images/upload]) --> B{JWT valid?}
+    B -->|No| B1[401 Unauthorized]
+    B -->|Yes| C{Is Admin?}
+
+    C -->|Yes ✓| BYPASS[Skip credit check]
+    C -->|No| D{model = flux-schnell?}
+
+    D -->|Yes ✓ free tier| BYPASS
+    D -->|No| E[Query user_credits table\nWHERE user_id + model_tier]
+
+    E --> F{Row exists?}
+    F -->|No — first time| G[SeedFreeCredits\ngpt_mini_low=5\nkontext=3\ngpt_mini_high=1]
+    G --> E
+
+    F -->|Yes| H{credits_remaining > 0?}
+    H -->|No| I[402 Payment Required\nINSUFFICIENT_CREDITS]
+    H -->|Yes| J[Atomic UPDATE\nSET credits_remaining = credits_remaining - 1\nWHERE credits_remaining > 0]
+
+    J --> K{Rows affected = 1?}
+    K -->|0 — race condition| I
+    K -->|1 ✓| BYPASS
+
+    BYPASS --> L[Publish ImageUploadedEvent\n→ RabbitMQ image-events]
+    L --> M[IA Service processes image]
+
+    M --> N{Result?}
+    N -->|ImageProcessingCompletedEvent| O[✅ Credit consumed\nImage saved to DB]
+    N -->|ImageProcessingFailedEvent| P{ErrorCode?}
+
+    P -->|CONTENT_MODERATION_VIOLATION| Q[❌ Credit NOT refunded\nintentional abuse deterrent]
+    P -->|MODEL_NOT_FOUND\nPROCESSING_ERROR\nUPLOAD_ERROR| R[♻️ Refund 1 credit\nSET credits_remaining = credits_remaining + 1]
+```
+
+---
+
+### **2. Free Credit Seeding — First-Time User Flow**
+
+Shows when and how free credits are initialized for a new user.
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant IC as ImagesController
+    participant IS as ImageService
+    participant CS as CreditService
+    participant DB as PostgreSQL user_credits
+
+    U->>IC: POST /api/images/upload (first ever request)
+    IC->>IS: UploadAsync(request, isAdmin=false)
+    IS->>CS: TryDeductCreditAsync(userId, GptMiniLow)
+    CS->>DB: SELECT WHERE user_id=? AND model_tier=GptMiniLow
+    DB-->>CS: (empty — no rows)
+
+    CS->>CS: SeedFreeCreditsAsync(userId)
+    CS->>DB: INSERT user_credits (GptMiniLow, remaining=5, total=5)
+    CS->>DB: INSERT user_credits (Kontext, remaining=3, total=3)
+    CS->>DB: INSERT user_credits (GptMiniHigh, remaining=1, total=1)
+    DB-->>CS: 3 rows inserted
+
+    CS->>DB: SELECT WHERE user_id=? AND model_tier=GptMiniLow
+    DB-->>CS: { remaining: 5 }
+
+    CS->>DB: UPDATE SET remaining=4 WHERE remaining > 0
+    DB-->>CS: 1 row affected ✓
+    CS-->>IS: Result.Success(true)
+    IS->>IS: Continue with image processing...
+    IS-->>U: 201 Created
+```
+
+---
+
+### **3. End-to-End Flow with Credit System**
+
+Complete flow from frontend to IA Service, including credit gate and refund path.
+
+```mermaid
+flowchart LR
+    subgraph "User Layer"
+        U([User])
+        F[Frontend\nAngular]
+    end
+
+    subgraph "API Layer"
+        GW[Gateway\nYARP]
+        PS[Projects Service\n.NET]
+        subgraph "Credit Gate"
+            CG{Admin or\nflux-schnell?}
+            CC[Check user_credits]
+            CD[Deduct 1 credit\natomically]
+        end
+    end
+
+    subgraph "Message Broker"
+        MQ[(RabbitMQ)]
+    end
+
+    subgraph "IA Processing"
+        IA[IA Service\nPython]
+        GR[Guardrails]
+        PR[AI Processor]
+    end
+
+    subgraph "Storage"
+        CL[Cloudinary]
+        DB[(PostgreSQL\nuser_credits)]
+    end
+
+    U -->|Upload + prompt| F
+    F -->|HTTP POST /api/images/upload| GW
+    GW -->|Route| PS
+    PS --> CG
+
+    CG -->|bypass| MQ
+    CG -->|check| CC
+    CC -->|0 credits| PS
+    PS -->|402| F
+    CC -->|has credits| CD
+    CD -->|success| MQ
+
+    MQ -->|ImageUploadedEvent| IA
+    IA --> GR
+    GR -->|pass| PR
+    PR -->|result image| CL
+    CL -->|url| PR
+
+    PR -->|ImageProcessingCompletedEvent| MQ
+    MQ -->|consume| PS
+    PS -->|save image record| DB
+
+    GR -->|CONTENT_MODERATION_VIOLATION| MQ
+    PR -->|PROCESSING_ERROR / UPLOAD_ERROR| MQ
+    MQ -->|ImageProcessingFailedEvent| PS
+    PS -->|ErrorCode ≠ MODERATION\n→ Refund 1 credit| DB
+```
 
 ---
 
