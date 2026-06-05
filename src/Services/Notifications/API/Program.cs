@@ -184,20 +184,14 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
+var allowedOriginsNotifications = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? new[] { "http://localhost:3000" };
+
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAll", policy =>
-    {
-        policy.AllowAnyOrigin()
-              .AllowAnyMethod()
-              .AllowAnyHeader();
-    });
-
     options.AddPolicy("WebSocketPolicy", policy =>
     {
-        policy.WithOrigins(
-                "https://localhost:3000", "https://localhost:5173",
-                "http://localhost:3000", "http://localhost:5173")
+        policy.WithOrigins(allowedOriginsNotifications)
               .AllowAnyMethod()
               .AllowAnyHeader()
               .AllowCredentials();

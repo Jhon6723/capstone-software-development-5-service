@@ -62,8 +62,9 @@ public record ImageProcessingFailedEvent(
     string ImageId,
     string UserId,
     string ProjectId,
-    string ImageUrl,
+    string? ImageUrl,
     string ErrorMessage,
     string ErrorCode,
-    DateTime FailedAt
+    DateTime FailedAt,
+    string? ModelUsed = null
 );

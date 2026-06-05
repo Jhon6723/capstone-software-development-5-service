@@ -38,29 +38,48 @@ public class RabbitMqConsumer : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await Task.Delay(5000, stoppingToken);
+        const int maxRetries = 10;
+        int retryDelay = 5;
 
-        try
+        for (int attempt = 1; attempt <= maxRetries; attempt++)
         {
-            InitializeRabbitMq();
+            if (stoppingToken.IsCancellationRequested) return;
 
-            ConsumeQueue("user-events", HandleUserEvent, stoppingToken);
-            ConsumeQueue("project-events", HandleProjectEvent, stoppingToken);
-            ConsumeQueue("notifications", HandleNotificationEvent, stoppingToken);
-            ConsumeQueue("image-processing-events", HandleImageProcessingEvent, stoppingToken);
-            ConsumeQueue("processed-image-events", HandleImageProcessingEvent, stoppingToken);
-            ConsumeQueue("notification-domain-events", HandleDomainEvent, stoppingToken);
-
-            _logger.LogInformation("RabbitMQ Consumer started successfully");
-
-            while (!stoppingToken.IsCancellationRequested)
+            try
             {
-                await Task.Delay(1000, stoppingToken);
+                InitializeRabbitMq();
+
+                ConsumeQueue("user-events", HandleUserEvent, stoppingToken);
+                ConsumeQueue("project-events", HandleProjectEvent, stoppingToken);
+                ConsumeQueue("notifications", HandleNotificationEvent, stoppingToken);
+                ConsumeQueue("image-processing-events", HandleImageProcessingEvent, stoppingToken);
+                ConsumeQueue("processed-image-events", HandleImageProcessingEvent, stoppingToken);
+                ConsumeQueue("notification-domain-events", HandleDomainEvent, stoppingToken);
+
+                _logger.LogInformation("RabbitMQ Consumer started successfully");
+
+                while (!stoppingToken.IsCancellationRequested)
+                {
+                    await Task.Delay(1000, stoppingToken);
+                }
+
+                return;
             }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error in RabbitMQ Consumer");
+            catch (Exception ex) when (attempt < maxRetries)
+            {
+                _logger.LogWarning(
+                    "RabbitMQ connection failed (attempt {Attempt}/{Max}), retrying in {Delay}s... Error: {Error}",
+                    attempt, maxRetries, retryDelay, ex.Message);
+
+                try { _channel?.Close(); _connection?.Close(); } catch { }
+
+                await Task.Delay(TimeSpan.FromSeconds(retryDelay), stoppingToken);
+                retryDelay = Math.Min(retryDelay * 2, 60);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "RabbitMQ Consumer failed after {Max} attempts", maxRetries);
+            }
         }
     }
 
@@ -420,12 +439,15 @@ public class RabbitMqConsumer : BackgroundService
             {
                 { "eventType", "ImageProcessingFailed" },
                 { "imageId", imageEvent.ImageId },
-                { "imageUrl", imageEvent.ImageUrl },
+                { "imageUrl", imageEvent.ImageUrl ?? string.Empty },
                 { "errorMessage", imageEvent.ErrorMessage },
                 { "errorCode", imageEvent.ErrorCode },
                 { "projectId", imageEvent.ProjectId },
                 { "failedAt", imageEvent.FailedAt.ToString("O") }
             };
+
+            if (imageEvent.ModelUsed is not null)
+                metadata["modelUsed"] = imageEvent.ModelUsed;
 
             var command = new CreateNotificationCommand(
                 UserId: imageEvent.UserId,
