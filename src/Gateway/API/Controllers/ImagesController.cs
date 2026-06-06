@@ -35,9 +35,16 @@ public class ImagesController : ControllerBase
     /// </ul>
     ///
     /// <b>Processing Models (Editor mode only):</b>
-    /// - <c>gpt-image-1-mini-low</c> - Image editing (Default tier, ~$0.011/img)
-    /// - <c>kontext</c> - High-quality editing (Standard tier, ~$0.04/img)
-    /// - <c>gpt-image-1-mini-high</c> - Premium editing (AI Reasoning tier, ~$0.167/img)
+    /// - <c>gpt-image-1-mini-low</c> - Image editing (Default tier, ~$0.011/img) — costs 1 credit
+    /// - <c>kontext</c> - High-quality editing (Standard tier, ~$0.04/img) — costs 1 credit
+    /// - <c>gpt-image-1-mini-high</c> - Premium editing (AI Reasoning tier, ~$0.167/img) — costs 1 credit
+    ///
+    /// <b>Credit System:</b>
+    /// Editor mode (Feature=1) consumes 1 credit per model tier. Free tier allocation:
+    /// <c>gpt-image-1-mini-low</c>=5, <c>kontext</c>=3, <c>gpt-image-1-mini-high</c>=1.
+    /// Generator mode (Feature=0) is always free — no credits consumed.
+    /// Credits are refunded automatically on processing failure (except content moderation violations).
+    /// Use <c>GET /api/credits/me</c> to check your balance.
     ///
     /// <b>Example - Text-to-Image:</b>
     /// <code>
@@ -70,8 +77,37 @@ public class ImagesController : ControllerBase
     [ProducesResponseType(typeof(ImageResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status402PaymentRequired)]
     [RequestSizeLimit(10485760)] // 10 MB
     public IActionResult UploadImage([FromForm] UploadImageRequest request)
+    {
+        throw new NotImplementedException("This endpoint is proxied by YARP to Projects service");
+    }
+
+    /// <summary>
+    /// Delete an image by ID
+    /// </summary>
+    /// <remarks>
+    /// Permanently deletes the image record from the database and removes the asset from Cloudinary.
+    ///
+    /// <b>Authorization rules:</b>
+    /// <ul>
+    ///   <li>Regular users can only delete images they own.</li>
+    ///   <li>Admin users can delete any image.</li>
+    /// </ul>
+    ///
+    /// Returns <c>204 No Content</c> on success.
+    /// </remarks>
+    /// <param name="id">Image GUID to delete</param>
+    /// <returns>No content on success</returns>
+    [HttpDelete("{id}")]
+    [Produces("application/json")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public IActionResult DeleteImage(string id)
     {
         throw new NotImplementedException("This endpoint is proxied by YARP to Projects service");
     }
