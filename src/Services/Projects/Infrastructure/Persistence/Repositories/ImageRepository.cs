@@ -47,6 +47,12 @@ public sealed class ImageRepository(ProjectsDbContext context) : IImageRepositor
         return (images, total);
     }
 
+    public Task DeleteAsync(Image image, CancellationToken cancellationToken = default)
+    {
+        _context.Images.Remove(image);
+        return Task.CompletedTask;
+    }
+
     public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         return await _context.SaveChangesAsync(cancellationToken);

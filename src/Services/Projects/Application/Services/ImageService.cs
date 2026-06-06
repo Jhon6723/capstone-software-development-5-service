@@ -175,4 +175,40 @@ public class ImageService : IImageService
             return Result<ImageUploadResponse>.Failure($"Error processing image request: {ex.Message}");
         }
     }
+
+    public async Task<Result> DeleteImageAsync(
+        Guid imageId,
+        Guid requestingUserId,
+        bool isAdmin,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var image = await _imageRepository.GetByIdAsync(imageId, cancellationToken);
+
+            if (image is null)
+                return Result.Failure("Image not found.");
+
+            if (!isAdmin && image.OwnerId != requestingUserId)
+                return Result.Failure("FORBIDDEN");
+
+            if (!string.IsNullOrWhiteSpace(image.CloudinaryPublicId))
+            {
+                await _storageService.DeleteAsync(image.CloudinaryPublicId, cancellationToken);
+                _logger.LogInformation("Cloudinary asset deleted: {PublicId}", image.CloudinaryPublicId);
+            }
+
+            await _imageRepository.DeleteAsync(image, cancellationToken);
+            await _imageRepository.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation("Image deleted: {ImageId} by User: {UserId}", imageId, requestingUserId);
+
+            return Result.Success();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting image {ImageId}", imageId);
+            return Result.Failure($"Error deleting image: {ex.Message}");
+        }
+    }
 }

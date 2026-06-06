@@ -80,8 +80,26 @@ public sealed class CreditService : ICreditService
 
     public async Task<Result<CreditBalanceResponse>> GetBalanceAsync(
         Guid userId,
+        bool isAdmin = false,
         CancellationToken cancellationToken = default)
     {
+        if (isAdmin)
+        {
+            var adminResponse = new CreditBalanceResponse
+            {
+                UserId = userId.ToString(),
+                SubscriptionTier = "Admin",
+                Credits = Enum.GetValues<ModelTier>().Select(tier => new ModelCreditResponse
+                {
+                    ModelTier = tier.ToString(),
+                    Remaining = int.MaxValue,
+                    Total = int.MaxValue,
+                    ResetAt = null
+                }).ToList()
+            };
+            return Result<CreditBalanceResponse>.Success(adminResponse);
+        }
+
         var credits = await _creditRepository.GetAllByUserAsync(userId, cancellationToken);
 
         if (credits.Count == 0)

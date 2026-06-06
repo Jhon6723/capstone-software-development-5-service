@@ -96,4 +96,40 @@ public class ImagesController : ControllerBase
 
         return StatusCode(StatusCodes.Status201Created, result.Value);
     }
+
+    [HttpDelete("{id}")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Delete(string id, CancellationToken cancellationToken = default)
+    {
+        var ownerIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)
+                           ?? User.FindFirst("sub");
+
+        if (ownerIdClaim == null)
+            return Unauthorized(new { error = "Invalid token: user ID not found." });
+
+        if (!Guid.TryParse(id, out var imageId))
+            return BadRequest(new { error = "Invalid image ID format." });
+
+        var requestingUserId = UserIdHelper.DeriveGuid(ownerIdClaim.Value);
+        var isAdmin = User.IsInRole("Admin");
+
+        var result = await _imageService.DeleteImageAsync(imageId, requestingUserId, isAdmin, cancellationToken);
+
+        if (!result.IsSuccess)
+        {
+            if (result.Error == "Image not found.")
+                return NotFound(new { error = result.Error });
+
+            if (result.Error == "FORBIDDEN")
+                return StatusCode(StatusCodes.Status403Forbidden, new { error = "You do not own this image." });
+
+            return BadRequest(new { error = result.Error });
+        }
+
+        return NoContent();
+    }
 }

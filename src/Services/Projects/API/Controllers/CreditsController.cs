@@ -31,8 +31,9 @@ public class CreditsController : ControllerBase
             return Unauthorized(new { error = "Invalid token: user ID not found." });
 
         var userId = UserIdHelper.DeriveGuid(ownerIdClaim.Value);
+        var isAdmin = User.IsInRole("Admin");
 
-        var result = await _creditService.GetBalanceAsync(userId, cancellationToken);
+        var result = await _creditService.GetBalanceAsync(userId, isAdmin, cancellationToken);
 
         if (!result.IsSuccess)
             return BadRequest(new { error = result.Error });

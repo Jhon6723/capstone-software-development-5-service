@@ -13,5 +13,6 @@ public interface IImageRepository
         int page,
         int pageSize,
         CancellationToken cancellationToken = default);
+    Task DeleteAsync(Image image, CancellationToken cancellationToken = default);
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }
