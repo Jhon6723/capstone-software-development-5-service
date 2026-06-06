@@ -212,7 +212,7 @@ Response 200:
 The Payment Service is a fully autonomous microservice. It:
 1. Receives webhooks from a payment provider (Stripe or MercadoPago)
 2. Validates and records the payment
-3. Publishes a `SubscriptionActivatedEvent` to RabbitMQ
+3. Publishes a `SubscriptionActivatedEvent` or `CreditPurchasedEvent` to RabbitMQ depending on payment type
 
 The Projects Service consumes that event and activates the subscription with no human intervention. No service calls another directly — everything is event-driven.
 
@@ -265,12 +265,15 @@ payment_records
 ├── user_id             UUID            NOT NULL
 ├── provider            VARCHAR(50)     NOT NULL   (stripe | mercadopago)
 ├── provider_payment_id VARCHAR(255)    NOT NULL   UNIQUE
-├── subscription_tier   VARCHAR(50)     NOT NULL   (basic | pro | unlimited)
+├── payment_type        VARCHAR(50)     NOT NULL   (subscription | credit_topup)   -- NEW
+├── subscription_tier   VARCHAR(50)     NULLABLE   (basic | pro | unlimited)       -- NULL for credit_topup
+├── model_tier          VARCHAR(50)     NULLABLE   (gpt_mini_low | kontext | gpt_mini_high) -- NULL for subscription
+├── credits_purchased   INT             NULLABLE                                   -- NULL for subscription
 ├── amount              DECIMAL(10,2)   NOT NULL
 ├── currency            VARCHAR(10)     NOT NULL
 ├── status              VARCHAR(50)     NOT NULL   (pending | completed | failed | refunded)
-├── valid_from          TIMESTAMPTZ     NOT NULL
-├── valid_until         TIMESTAMPTZ     NULLABLE   -- NULL for unlimited
+├── valid_from          TIMESTAMPTZ     NULLABLE   -- NULL for credit_topup (credits never expire)
+├── valid_until         TIMESTAMPTZ     NULLABLE   -- NULL for unlimited or credit_topup
 └── created_at          TIMESTAMPTZ     NOT NULL   DEFAULT now()
 ```
 
@@ -295,7 +298,114 @@ Published to `payment-events` Fanout Exchange. Consumed by the Projects Service.
 
 > Credits per tier (`CreditsLow`, `CreditsKontext`, `CreditsHigh`) are defined in the Payment Service config, not hardcoded per event. This allows changing tier allocations without redeploying Projects Service.
 
-### **Webhook Flow**
+### **`CreditPurchasedEvent` (RabbitMQ)**
+
+Published when a user purchases a one-time credit top-up pack. Consumed by the Projects Service, which increments `credits_remaining` and `credits_total` for the specified `ModelTier`.
+
+```json
+{
+  "EventType": "CreditPurchasedEvent",
+  "UserId": "uuid",
+  "ModelTier": "gpt_mini_high",
+  "CreditsPurchased": 30,
+  "PaymentProvider": "stripe",
+  "PaymentRecordId": "uuid"
+}
+```
+
+> `CreditsPurchased` is resolved by the Payment Service from its config (e.g. `$1 → 30 credits for gpt_mini_high`). The Projects Service only applies the delta — it does not know the price.
+
+#### **How the Payment Service resolves `CreditsPurchased`**
+
+When the checkout session is created (`POST /api/payments/credits/checkout`), the user selects a `modelTier`. The Payment Service:
+1. Reads `CreditPacks` config to find `pack_size` for that tier.
+2. Creates a Stripe/MercadoPago checkout session for `PriceUsd` ($1.00), attaching `{ userId, modelTier, packSize }` as session metadata.
+3. When the webhook fires (`payment_intent.succeeded`), reads back the metadata and builds the `CreditPurchasedEvent` with the pre-resolved `CreditsPurchased` value.
+
+This means the Projects Service is completely price-agnostic — it only receives "add N credits to tier X for user Y" and applies it.
+
+#### **Credit Top-Up — Pricing table**
+
+| Model Tier | Credits per $1 | Approx. real cost per image | Notes |
+|------------|---------------|------------------------------|-------|
+| `gpt_mini_low` | **100** | ~$0.01 | Cheapest img2img option |
+| `kontext` | **60** | ~$0.017 | Standard quality |
+| `gpt_mini_high` | **30** | ~$0.033 | Premium quality |
+
+> Pricing values are **configurable** in `CreditPacks` appsettings — no redeployment needed to adjust them.
+
+#### **Top-Up behavior in `user_credits`**
+
+- `credits_remaining` is **incremented** (stacks with subscription credits).
+- `credits_total` is also incremented to reflect cumulative purchased credits.
+- No `reset_at` is set — purchased credits **never expire**.
+- If the row for `(user_id, model_tier)` does not exist yet, the Projects Service inserts it with the purchased amount.
+
+#### **Credit Top-Up Flow (end-to-end)**
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant GW as Gateway (YARP)
+    participant PAY as Payment Service
+    participant STRIPE as Stripe
+    participant R as RabbitMQ
+    participant PROJ as Projects Service
+    participant UDB as Projects DB
+
+    U->>GW: POST /api/payments/credits/checkout { modelTier: "gpt_mini_high" }
+    GW->>PAY: Route (JWT validated)
+    PAY->>PAY: Resolve pack_size from CreditPacks config (30)
+    PAY->>STRIPE: Create checkout session ($1.00, metadata: { userId, modelTier, packSize })
+    STRIPE-->>PAY: { checkoutUrl }
+    PAY-->>U: 200 { checkoutUrl }
+
+    U->>STRIPE: Complete payment on checkout page
+    STRIPE->>PAY: POST /api/webhooks/stripe (payment_intent.succeeded)
+    PAY->>PAY: Validate signature
+    PAY->>PAY: Read metadata → userId, modelTier, packSize
+    PAY->>PAY: INSERT payment_records (payment_type='credit_topup')
+    PAY->>R: Publish CreditPurchasedEvent → payment-events exchange
+    R-->>PROJ: Consume CreditPurchasedEvent
+    PROJ->>UDB: UPDATE user_credits
+    Note over PROJ,UDB: SET credits_remaining = credits_remaining + 30,
+    Note over PROJ,UDB: credits_total = credits_total + 30
+    Note over PROJ,UDB: WHERE user_id = ? AND model_tier = 'gpt_mini_high'
+```
+
+#### **Credit Pack Config (Payment Service)**
+
+Stored in appsettings / environment variables so values can be updated without redeploying:
+
+```json
+"CreditPacks": {
+  "PriceUsd": 1.00,
+  "GptMiniLow":  100,
+  "Kontext":      60,
+  "GptMiniHigh":  30
+}
+```
+
+### **Credit Top-Up Endpoint (Frontend → Gateway)**
+
+```
+POST /api/payments/credits/checkout
+[Authorize]  -- any authenticated user
+
+Body:
+{
+  "modelTier": "gpt_mini_high"   // gpt_mini_low | kontext | gpt_mini_high
+}
+
+Response 200:
+{
+  "checkoutUrl": "https://checkout.stripe.com/..."
+}
+```
+
+The Gateway routes this to the Payment Service. The Payment Service creates a Stripe/MercadoPago checkout session with the correct amount ($1) and attaches `modelTier` + `userId` as metadata so the webhook handler can resolve them later.
+
+### **Webhook Flow (both payment types)**
 
 ```mermaid
 sequenceDiagram
@@ -308,12 +418,19 @@ sequenceDiagram
 
     P->>PAY: POST /api/webhooks/stripe (or /mercadopago)
     PAY->>PAY: Validate webhook signature
-    PAY->>PAY: Parse event type (payment_intent.succeeded etc.)
-    PAY->>DB: INSERT payment_records (status=completed)
-    PAY->>R: Publish SubscriptionActivatedEvent → payment-events exchange
-    R-->>PROJ: Consume SubscriptionActivatedEvent
-    PROJ->>UDB: UPSERT user_credits SET subscription_tier, credits_remaining, reset_at
-    PROJ-->>R: (no reply needed — fire and forget)
+    PAY->>PAY: Parse event type + read session metadata
+
+    alt payment_type = subscription
+        PAY->>DB: INSERT payment_records (payment_type='subscription')
+        PAY->>R: Publish SubscriptionActivatedEvent
+        R-->>PROJ: Consume SubscriptionActivatedEvent
+        PROJ->>UDB: UPSERT user_credits SET subscription_tier, credits_remaining, reset_at
+    else payment_type = credit_topup
+        PAY->>DB: INSERT payment_records (payment_type='credit_topup')
+        PAY->>R: Publish CreditPurchasedEvent
+        R-->>PROJ: Consume CreditPurchasedEvent
+        PROJ->>UDB: UPDATE user_credits SET credits_remaining += pack_size, credits_total += pack_size
+    end
 ```
 
 ### **Webhook Endpoint**
@@ -346,7 +463,7 @@ Adding `payment-events` exchange to the existing setup:
 |----------|------|-----------|----------|--------|
 | `image-events` | Fanout | Projects Service | IA Service | `ImageUploadedEvent` |
 | `processed-image-events` | Fanout | IA Service | Notifications Service | `ImageProcessingCompletedEvent`, `ImageProcessingFailedEvent` |
-| `payment-events` | Fanout | Payment Service | Projects Service | `SubscriptionActivatedEvent` |
+| `payment-events` | Fanout | Payment Service | Projects Service | `SubscriptionActivatedEvent`, `CreditPurchasedEvent` |
 
 ```mermaid
 flowchart LR
@@ -374,7 +491,7 @@ flowchart LR
     IA -->|ImageProcessingCompletedEvent<br/>ImageProcessingFailedEvent| PIE
     PIE --> NS
 
-    PAY -->|SubscriptionActivatedEvent| PE
+    PAY -->|SubscriptionActivatedEvent<br/>CreditPurchasedEvent| PE
     PE --> PSC
 ```
 
@@ -445,7 +562,125 @@ flowchart TB
 
 ---
 
-## **6. End-to-End Subscription Activation Flow**
+## **6. Admin Panel — Payment & Subscription Management**
+
+The admin panel gives administrators full visibility and control over users' subscriptions and purchase history. All endpoints are protected with `[Authorize(Policy = "Admin")]`.
+
+### **New Admin Endpoints — Projects Service**
+
+#### `GET /api/projects/admin/users/{userId}/payments` — View payment history for a user
+
+```
+[Authorize(Policy = "Admin")]
+GET /api/projects/admin/users/{userId}/payments?page=1&pageSize=20
+
+Response 200:
+{
+  "userId": "uuid",
+  "items": [
+    {
+      "paymentRecordId": "uuid",
+      "paymentType": "credit_topup",
+      "modelTier": "gpt_mini_high",
+      "creditsPurchased": 30,
+      "subscriptionTier": null,
+      "amount": 1.00,
+      "currency": "USD",
+      "status": "completed",
+      "provider": "stripe",
+      "createdAt": "2025-06-05T00:00:00Z"
+    },
+    {
+      "paymentRecordId": "uuid",
+      "paymentType": "subscription",
+      "modelTier": null,
+      "creditsPurchased": null,
+      "subscriptionTier": "pro",
+      "amount": 9.99,
+      "currency": "USD",
+      "status": "completed",
+      "provider": "stripe",
+      "createdAt": "2025-05-01T00:00:00Z"
+    }
+  ],
+  "totalCount": 2,
+  "page": 1,
+  "pageSize": 20
+}
+```
+
+**Note:** This endpoint queries the **Payment Service DB** via an internal HTTP call from the admin endpoint, or alternatively the Payment Service exposes its own internal admin endpoint. Architecture decision: prefer a dedicated `GET /api/payments/admin/users/{userId}/history` on the Payment Service, routed through the Gateway under the admin policy.
+
+#### `GET /api/payments/admin/users/{userId}/history` — Payment Service internal admin endpoint
+
+```
+[Authorize(Policy = "Admin")]
+GET /api/payments/admin/users/{userId}/history?page=1&pageSize=20
+
+Response 200: (same shape as above)
+```
+
+#### `GET /api/payments/admin/summary` — Global payment summary
+
+```
+[Authorize(Policy = "Admin")]
+GET /api/payments/admin/summary
+
+Response 200:
+{
+  "totalRevenue": 1234.50,
+  "totalSubscriptions": 85,
+  "totalTopUps": 210,
+  "activeSubscriptions": {
+    "basic": 40,
+    "pro": 30,
+    "unlimited": 15
+  },
+  "topUpsByTier": {
+    "gpt_mini_low": 100,
+    "kontext": 70,
+    "gpt_mini_high": 40
+  }
+}
+```
+
+### **Admin Panel — Capabilities Summary**
+
+| Capability | Endpoint | Service |
+|------------|----------|---------|
+| List all users | `GET /api/auth/users` | Auth Service |
+| Block / unblock user | `PATCH /api/auth/users/{id}/status` | Auth Service |
+| View user credit balance | `GET /api/projects/admin/users/{id}/credits` | Projects Service |
+| Manually assign subscription | `PATCH /api/projects/admin/users/{id}/subscription` | Projects Service |
+| View user payment history | `GET /api/payments/admin/users/{id}/history` | Payment Service |
+| Global revenue summary | `GET /api/payments/admin/summary` | Payment Service |
+
+### **Admin Panel Flow — Viewing a user's full profile**
+
+```mermaid
+sequenceDiagram
+    participant A as Admin
+    participant GW as Gateway (YARP)
+    participant AUTH as Auth Service
+    participant PROJ as Projects Service
+    participant PAY as Payment Service
+
+    A->>GW: GET /api/auth/users/{id}
+    GW->>AUTH: Route
+    AUTH-->>A: { id, email, role, isActive }
+
+    A->>GW: GET /api/projects/admin/users/{id}/credits
+    GW->>PROJ: Route
+    PROJ-->>A: { subscriptionTier, credits[] }
+
+    A->>GW: GET /api/payments/admin/users/{id}/history
+    GW->>PAY: Route
+    PAY-->>A: { items: [ subscriptions + topups ] }
+```
+
+---
+
+## **7. End-to-End Subscription Activation Flow**
 
 ```mermaid
 flowchart TD
@@ -468,7 +703,7 @@ flowchart TD
 
 ---
 
-## **7. Summary: New Components**
+## **8. Summary: New Components**
 
 | Component | Service | Type | Status |
 |-----------|---------|------|--------|
@@ -483,3 +718,7 @@ flowchart TD
 | `payment_records` table | Payment DB | PostgreSQL | New |
 | `payment-events` exchange | RabbitMQ | Fanout exchange | New |
 | `SubscriptionActivatedEvent` | RabbitMQ | Event message | New |
+| `CreditPurchasedEvent` | RabbitMQ | Event message | New |
+| `POST /api/payments/credits/checkout` | Payment Service | Credit top-up checkout endpoint | New |
+| `GET /api/payments/admin/users/{id}/history` | Payment Service | Admin: user payment history | New |
+| `GET /api/payments/admin/summary` | Payment Service | Admin: global revenue summary | New |

@@ -192,6 +192,8 @@ Subscriptions expand the monthly credit pool. Exact pricing TBD.
 
 > `N` values to be defined when subscription pricing is established.
 
+> For credit top-up (pay-as-you-go) pricing, flow and event design, see [`admin-and-payments-architecture.md`](../admin-and-payments-architecture.md) — Section 3: Payment Service.
+
 ### **Admin Role**
 
 Admins bypass all credit checks entirely — no deduction, no limit on any model.
