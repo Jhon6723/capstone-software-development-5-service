@@ -9,6 +9,7 @@ using PixPro.Services.Projects.Application.IntegrationEvents;
 using PixPro.Services.Projects.Application.Interfaces;
 using PixPro.Services.Projects.Application.Services;
 using PixPro.Services.Projects.Domain.Entities;
+using PixPro.Services.Projects.Domain.Enums;
 using PixPro.Services.Projects.Domain.Repositories;
 
 namespace PixPro.UnitTests.Services.Projects.Services;
@@ -19,6 +20,7 @@ public class ImageServiceTests
     private readonly Mock<IStorageService> _storageServiceMock;
     private readonly Mock<ILogger<ImageService>> _loggerMock;
     private readonly Mock<IMessagePublisher> _messagePublisherMock;
+    private readonly Mock<ICreditService> _creditServiceMock;
     private readonly ImageService _sut;
 
     public ImageServiceTests()
@@ -27,11 +29,16 @@ public class ImageServiceTests
         _storageServiceMock = new Mock<IStorageService>();
         _loggerMock = new Mock<ILogger<ImageService>>();
         _messagePublisherMock = new Mock<IMessagePublisher>();
+        _creditServiceMock = new Mock<ICreditService>();
+        _creditServiceMock
+            .Setup(x => x.TryDeductCreditAsync(It.IsAny<Guid>(), It.IsAny<ModelTier>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Result<bool>.Success(true));
         _sut = new ImageService(
             _imageRepositoryMock.Object,
             _storageServiceMock.Object,
             _loggerMock.Object,
-            _messagePublisherMock.Object);
+            _messagePublisherMock.Object,
+            _creditServiceMock.Object);
     }
 
     private Mock<IFormFile> CreateMockImageFile(string fileName = "test.jpg", string contentType = "image/jpeg", long length = 1024 * 1024)

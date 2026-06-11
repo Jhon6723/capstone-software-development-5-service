@@ -44,7 +44,7 @@ class TestProcessingParameters:
         assert params.width == 512
         assert params.height == 512
         assert params.quantity == 1
-        assert params.model == "gpt-image-1-mini-low"
+        assert params.model == "kontext"
     
     # TEST 3: Verify that invalid width values are rejected
     # Tests that width values above the maximum (2048) raise validation error

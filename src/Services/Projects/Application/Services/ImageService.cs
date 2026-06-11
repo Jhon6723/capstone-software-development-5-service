@@ -33,9 +33,12 @@ public class ImageService : IImageService
     private static readonly IReadOnlyDictionary<string, ModelTier> ModelTierMap =
         new Dictionary<string, ModelTier>(StringComparer.OrdinalIgnoreCase)
         {
-            { "gpt-image-1-mini-low",  ModelTier.GptMiniLow  },
-            { "gpt-image-1-mini-high", ModelTier.GptMiniHigh },
-            { "kontext",               ModelTier.Kontext      }
+            { "kontext",               ModelTier.Kontext        },
+            { "gpt-image-1.5-low",     ModelTier.Gpt15Low       },
+            { "nanobanana-low",        ModelTier.NanobananaLow  },
+            { "nanobanana-medium",     ModelTier.NanabanaMedium },
+            { "nanobanana-max",        ModelTier.NanabanaMax    },
+            { "gpt-image-1.5-medium",  ModelTier.Gpt15Medium    },
         };
 
     public ImageService(

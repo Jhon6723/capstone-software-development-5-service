@@ -216,10 +216,13 @@ public class ProcessedImageEventConsumer : BackgroundService
 
     private static ModelTier? ModelTierFromString(string model) => model switch
     {
-        "gpt-image-1-mini-low"  => ModelTier.GptMiniLow,
-        "gpt-image-1-mini-high" => ModelTier.GptMiniHigh,
-        "kontext"               => ModelTier.Kontext,
-        _                       => null
+        "kontext"              => ModelTier.Kontext,
+        "gpt-image-1.5-low"   => ModelTier.Gpt15Low,
+        "nanobanana-low"      => ModelTier.NanobananaLow,
+        "nanobanana-medium"   => ModelTier.NanabanaMedium,
+        "nanobanana-max"      => ModelTier.NanabanaMax,
+        "gpt-image-1.5-medium" => ModelTier.Gpt15Medium,
+        _                     => null
     };
 
     public override void Dispose()

@@ -79,7 +79,7 @@ public class ImagesController : ControllerBase
                 return BadRequest(new { error = "Editor mode (Feature=1) requires an image file for image-to-image editing." });
             
             if (processingParams == null || string.IsNullOrWhiteSpace(processingParams.Model))
-                return BadRequest(new { error = "Editor mode (Feature=1) requires 'model' in parameters. Valid models: gpt-image-1-mini-low, gpt-image-1-mini-high, kontext." });
+                return BadRequest(new { error = "Editor mode (Feature=1) requires 'model' in parameters. Valid models: kontext, gpt-image-1.5-low, gpt-image-1.5-medium, nanobanana-low, nanobanana-medium, nanobanana-max." });
         }
         // Generator mode (text-to-image) with Feature=0: file is optional
 

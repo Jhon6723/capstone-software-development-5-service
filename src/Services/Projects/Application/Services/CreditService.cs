@@ -14,9 +14,12 @@ public sealed class CreditService : ICreditService
 
     private static readonly IReadOnlyDictionary<ModelTier, int> FreeCredits = new Dictionary<ModelTier, int>
     {
-        { ModelTier.GptMiniLow,  5 },
-        { ModelTier.Kontext,     3 },
-        { ModelTier.GptMiniHigh, 1 }
+        { ModelTier.Kontext,        5 },
+        { ModelTier.Gpt15Low,       3 },
+        { ModelTier.NanobananaLow,  3 },
+        { ModelTier.NanabanaMedium, 2 },
+        { ModelTier.NanabanaMax,    1 },
+        { ModelTier.Gpt15Medium,    1 },
     };
 
     public CreditService(IUserCreditRepository creditRepository, ILogger<CreditService> logger)
@@ -102,7 +105,7 @@ public sealed class CreditService : ICreditService
 
         var credits = await _creditRepository.GetAllByUserAsync(userId, cancellationToken);
 
-        if (credits.Count == 0)
+        if (credits.Count < FreeCredits.Count)
         {
             await SeedFreeCreditsAsync(userId, cancellationToken);
             credits = await _creditRepository.GetAllByUserAsync(userId, cancellationToken);
