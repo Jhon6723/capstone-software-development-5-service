@@ -5,6 +5,7 @@ from app.processors.base import ImageProcessor, ModelTier
 from app.processors.openai_processor import OpenAIProcessor
 from app.processors.pollinations import PollinationsProcessor
 from app.processors.pixazo import PixazoProcessor
+from app.processors.nanobanana_processor import NanaBananaProcessor
 from app.processors.mock import MockImageProcessor
 from app.models.events import ProcessingParameters, ProcessingResult, ImageUploadedEvent, ProcessingFeature
 from app.services.cloudinary_service import CloudinaryService
@@ -24,23 +25,32 @@ class ImageProcessingService:
         """Get the appropriate processor for the requested model.
 
         Routing:
-          - DEFAULT      (gpt-image-1-mini-low)  -> OpenAIProcessor      (quality=low, image edit)
-          - PIXAZO       (flux-schnell)           -> PixazoProcessor      (text-to-image, cheapest)
-          - STANDARD     (kontext)                -> PollinationsProcessor (image-to-image)
-          - AI_REASONING (gpt-image-1-mini-high) -> OpenAIProcessor      (quality=high, image edit)
-          - Missing creds / unknown model        -> MockImageProcessor   (dev fallback)
+          - PIXAZO    (flux-schnell)          -> PixazoProcessor       (text-to-image, cheapest)
+          - DEFAULT   (kontext)               -> PollinationsProcessor  (default img2img ~$0.005)
+          - GPT15_LOW (gpt-image-1.5-low)    -> OpenAIProcessor        (quality=low  ~$0.009)
+          - NB_LOW    (nanobanana-low)        -> NanaBananaProcessor    (V1 ~$0.020)
+          - NB_MEDIUM (nanobanana-medium)     -> NanaBananaProcessor    (V2 ~$0.040)
+          - NB_MAX    (nanobanana-max)        -> NanaBananaProcessor    (Pro ~$0.090)
+          - GPT15_MED (gpt-image-1.5-medium) -> OpenAIProcessor        (quality=medium ~$0.034)
+          - Missing creds / unknown model    -> MockImageProcessor     (dev fallback)
         """
         model = model or ModelTier.DEFAULT.value
 
         try:
-            if model == ModelTier.DEFAULT.value:
-                return OpenAIProcessor(model="gpt-image-1-mini", quality="low")
             if model == ModelTier.PIXAZO.value:
                 return PixazoProcessor(model="flux-schnell")
-            if model == ModelTier.AI_REASONING.value:
-                return OpenAIProcessor(model="gpt-image-1-mini", quality="high")
-            if model == ModelTier.STANDARD.value:
+            if model == ModelTier.DEFAULT.value:
                 return PollinationsProcessor(model="kontext")
+            if model == ModelTier.GPT15_LOW.value:
+                return OpenAIProcessor(model="gpt-image-1.5", quality="low")
+            if model == ModelTier.NB_LOW.value:
+                return NanaBananaProcessor(tier=ModelTier.NB_LOW.value)
+            if model == ModelTier.NB_MEDIUM.value:
+                return NanaBananaProcessor(tier=ModelTier.NB_MEDIUM.value)
+            if model == ModelTier.NB_MAX.value:
+                return NanaBananaProcessor(tier=ModelTier.NB_MAX.value)
+            if model == ModelTier.GPT15_MED.value:
+                return OpenAIProcessor(model="gpt-image-1.5", quality="medium")
         except ValueError as e:
             logger.warning("Processor for model '%s' not configured: %s", model, e)
 
@@ -78,7 +88,8 @@ class ImageProcessingService:
                 logger.info(f"Feature=EDITOR detected - using specified model: {model}")
             else:
                 raise ValueError("Feature=EDITOR requires explicit 'model' in Parameters. "
-                               "Valid models: gpt-image-1-mini-low, gpt-image-1-mini-high, kontext")
+                               "Valid models: kontext, gpt-image-1.5-low, nanobanana-low, "
+                               "nanobanana-medium, nanobanana-max, gpt-image-1.5-medium")
         else:
             # Fallback for unknown feature values
             model = ModelTier.DEFAULT.value

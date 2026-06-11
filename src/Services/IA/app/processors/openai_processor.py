@@ -24,8 +24,8 @@ class OpenAIProcessor(ImageProcessor):
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = "gpt-image-1-mini",
-        quality: str = "medium",
+        model: str = "gpt-image-1.5",
+        quality: str = "low",
     ):
         self._api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not self._api_key:
@@ -41,6 +41,7 @@ class OpenAIProcessor(ImageProcessor):
         self._client = OpenAI(api_key=self._api_key)
 
         logger.info("OpenAI processor initialized (model=%s, quality=%s)", model, quality)
+
     
     @property
     def model_name(self) -> str:
@@ -62,7 +63,7 @@ class OpenAIProcessor(ImageProcessor):
         # Download original image
         image_data = download_image(image_url)
         
-        # OpenAI gpt-image-1 only supports a fixed set of sizes.
+        # OpenAI gpt-image-1 supports a fixed set of sizes.
         # Pick the closest one based on aspect ratio.
         size = self._closest_supported_size(parameters.width, parameters.height)
         

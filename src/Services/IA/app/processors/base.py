@@ -6,10 +6,13 @@ from app.models.events import ProcessingParameters, ProcessingResult
 
 class ModelTier(str, Enum):
     """Available AI model tiers"""
-    DEFAULT = "gpt-image-1-mini-low"     # OpenAI gpt-image-1-mini, quality=low (~$0.011/img)
-    PIXAZO = "flux-schnell"              # Pixazo Flux Schnell (~$0.0012/img) - Cheapest text-to-image
-    STANDARD = "kontext"                 # Pollinations FLUX.1 Kontext (~$0.04/img)
-    AI_REASONING = "gpt-image-1-mini-high"  # OpenAI gpt-image-1-mini, quality=high (~$0.167/img)
+    PIXAZO     = "flux-schnell"          # Pixazo Flux Schnell (~$0.0012/img) - text-to-image only
+    DEFAULT    = "kontext"               # Pollinations FLUX.1 Kontext (~$0.005/img) - default img2img
+    GPT15_LOW  = "gpt-image-1.5-low"    # OpenAI gpt-image-1, quality=low (~$0.009/img)
+    NB_LOW     = "nanobanana-low"        # NanaBanana V1 Gemini 2.5 Flash (~$0.020/img)
+    NB_MEDIUM  = "nanobanana-medium"     # NanaBanana V2 Gemini 3.1 Flash (~$0.040/img)
+    NB_MAX     = "nanobanana-max"        # NanaBanana Pro Gemini 3 Pro (~$0.090/img)
+    GPT15_MED  = "gpt-image-1.5-medium" # OpenAI gpt-image-1, quality=medium (~$0.034/img)
 
 
 class ImageProcessor(ABC):
