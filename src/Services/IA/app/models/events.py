@@ -28,7 +28,7 @@ class ProcessingParameters(BaseModel):
     strength: float = Field(default=0.75, ge=0.0, le=1.0, alias="Strength")
     guidance_scale: float = Field(default=7.5, ge=1.0, le=20.0, alias="GuidanceScale")
     quantity: int = Field(default=1, ge=1, le=10, alias="Quantity")
-    model: str = Field(default="gpt-image-1-mini-low", alias="Model")
+    model: str = Field(default="kontext", alias="Model")
 
     class Config:
         populate_by_name = True

@@ -35,13 +35,16 @@ public class ImagesController : ControllerBase
     /// </ul>
     ///
     /// <b>Processing Models (Editor mode only):</b>
-    /// - <c>gpt-image-1-mini-low</c> - Image editing (Default tier, ~$0.011/img) — costs 1 credit
-    /// - <c>kontext</c> - High-quality editing (Standard tier, ~$0.04/img) — costs 1 credit
-    /// - <c>gpt-image-1-mini-high</c> - Premium editing (AI Reasoning tier, ~$0.167/img) — costs 1 credit
+    /// - <c>kontext</c> - Fast editing via Pollinations (~$0.005/img) — costs 1 credit
+    /// - <c>gpt-image-1.5-low</c> - OpenAI GPT Image low quality (~$0.009/img) — costs 2 credits
+    /// - <c>nanobanana-low</c> - NanaBanana V1 (Gemini 2.5 Flash, ~$0.020/img) — costs 4 credits
+    /// - <c>nanobanana-medium</c> - NanaBanana V2 (Gemini 3.1 Flash, ~$0.040/img) — costs 8 credits
+    /// - <c>nanobanana-max</c> - NanaBanana Pro (Gemini 3 Pro, ~$0.090/img) — costs 18 credits
+    /// - <c>gpt-image-1.5-medium</c> - OpenAI GPT Image medium quality (~$0.034/img) — costs 7 credits
     ///
     /// <b>Credit System:</b>
-    /// Editor mode (Feature=1) consumes 1 credit per model tier. Free tier allocation:
-    /// <c>gpt-image-1-mini-low</c>=5, <c>kontext</c>=3, <c>gpt-image-1-mini-high</c>=1.
+    /// Editor mode (Feature=1) consumes credits per model tier. Free tier allocation:
+    /// <c>kontext</c>=10, <c>gpt-image-1.5-low</c>=5, <c>nanobanana-low</c>=3, <c>nanobanana-medium</c>=2, <c>nanobanana-max</c>=1, <c>gpt-image-1.5-medium</c>=2.
     /// Generator mode (Feature=0) is always free — no credits consumed.
     /// Credits are refunded automatically on processing failure (except content moderation violations).
     /// Use <c>GET /api/credits/me</c> to check your balance.
@@ -62,7 +65,7 @@ public class ImagesController : ControllerBase
     ///   "file": [upload image],
     ///   "prompt": "Add a moon in the sky",
     ///   "feature": 1,
-    ///   "parameters": {"model": "gpt-image-1-mini-low"}
+    ///   "parameters": {"model": "kontext"}
     /// }
     /// </code>
     ///

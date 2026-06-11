@@ -88,6 +88,7 @@ services:
       - POLLINATIONS_API_KEY=${POLLINATIONS_API_KEY}
       - POLLINATIONS_ENDPOINT=${POLLINATIONS_ENDPOINT}
       - PIXAZO_API_KEY=${PIXAZO_API_KEY}
+      - NANOBANANA_API_KEY=${NANOBANANA_API_KEY}
     depends_on:
       rabbitmq:
         condition: service_healthy

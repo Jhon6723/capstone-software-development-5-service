@@ -60,7 +60,7 @@ public class UploadImageRequest
     /// <b>Editor mode (Feature=1):</b> Required. Must include 'model' field.
     /// </remarks>
     /// <example>Generator: {"width": 512, "height": 512, "quantity": 1}</example>
-    /// <example>Editor: {"width": 512, "height": 512, "model": "gpt-image-1-mini-low", "strength": 0.75}</example>
+    /// <example>Editor: {"width": 512, "height": 512, "model": "kontext", "strength": 0.75}</example>
     public string? Parameters { get; set; }
 }
 
