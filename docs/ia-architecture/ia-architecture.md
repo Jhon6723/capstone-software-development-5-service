@@ -91,75 +91,192 @@ src/Services/IA/
 
 ## **AI Model Selection: Multi-Model Strategy**
 
-The IA service supports **3 tiers** across two providers (OpenAI + Pollinations.ai). The split is pragmatic: OpenAI is reliable and pay-per-call (so we use it at low and high quality for the cheapest and the most capable tiers), and Pollinations gives us a modern FLUX.1 Kontext img2img model in the middle.
+The IA service supports **7 tiers** across four providers (Pixazo.ai, OpenAI, Pollinations.ai, NanaBanana API). The split is pragmatic: Pixazo handles text-to-image at near-zero cost, Pollinations (FLUX.1 Kontext) is the default cheap img2img, OpenAI GPT Image 1.5 adds two quality levels (low/medium) for flagship editing, and NanaBanana (Google Gemini) provides three Gemini tiers with up to 14 reference images and Google Search grounding.
 
-**Default Model: GPT Image 1 Mini (low quality)**
-- Model key: `gpt-image-1-mini-low`
-- Provider: OpenAI (`POST /v1/images/edits`, `quality=low`)
-- Purpose: **Cheapest reliable image editing** — same OpenAI pipeline as the AI Reasoning tier, just at low quality to keep cost down
-- Cost: ~$0.011 per image
-- Why we use it as Default: already paid for in this project, predictable pricing, no minimum top-up, no separate API key to manage
+> **Rule:** Only `flux-schnell` (Pixazo) is text-to-image. Every other model requires a source image (`ImageUrl`) — they are all image-to-image.
+
+**Default Model: FLUX.1 Kontext (Pollinations)**
+- Model key: `kontext`
+- Provider: Pollinations.ai
+- Purpose: **Cheapest reliable instruction-based img2img** — pay-as-you-go in Pollen credits, no minimum top-up
+- Cost: ~$0.005 per image (~200 images per $1 Pollen)
+- Why we use it as Default: cheapest img2img option, state-of-the-art FLUX model, no separate heavy SDK needed
 
 ### **Available Models**
 
 | Tier | Model key | Provider | Task | Cost / image | Quality |
 |------|-----------|----------|------|--------------|---------|
 | **Budget** ⭐ | `flux-schnell` | Pixazo.ai | **text-to-image** | **~$0.0012** | ⭐⭐⭐⭐ |
-| Default | `gpt-image-1-mini-low` | OpenAI (`quality=low`) | image-to-image | ~$0.011 | ⭐⭐⭐⭐ |
-| Standard | `kontext` (FLUX.1 Kontext) | Pollinations.ai | image-to-image | ~$0.04 | ⭐⭐⭐⭐⭐ |
-| AI Reasoning | `gpt-image-1-mini-high` | OpenAI (`quality=high`) | image-to-image | ~$0.167 | ⭐⭐⭐⭐⭐ |
+| Default ⭐ | `kontext` (FLUX.1 Kontext) | Pollinations.ai | image-to-image | ~$0.005 | ⭐⭐⭐⭐⭐ |
+| GPT15 Low | `gpt-image-1.5-low` | OpenAI (`quality=low`) | image-to-image | ~$0.009 | ⭐⭐⭐⭐⭐ |
+| NanaBanana Low | `nanobanana-low` (Gemini 2.5 Flash) | NanaBanana API | image-to-image | ~$0.020 (1K · 4 credits) | ⭐⭐⭐⭐ |
+| NanaBanana Medium | `nanobanana-medium` (Gemini 3.1 Flash) | NanaBanana API | image-to-image | ~$0.040 (1K · 8 credits) | ⭐⭐⭐⭐⭐ |
+| NanaBanana Max | `nanobanana-max` (Gemini 3 Pro) | NanaBanana API | image-to-image | ~$0.090 (1K · 18 credits) | ⭐⭐⭐⭐⭐ |
+| GPT15 Medium | `gpt-image-1.5-medium` | OpenAI (`quality=medium`) | image-to-image | ~$0.034 | ⭐⭐⭐⭐⭐ |
 
 ### **Model Comparison**
 
 | Model | Parameters | Purpose | Provider | Quality |
 |-------|-------------|---------|----------|---------|
-| **GPT Image 1 Mini** ⭐ | N/A (closed) | Reasoning-based image editing | OpenAI | ⭐⭐⭐⭐⭐ |
-| FLUX.1 Kontext | ~12B | Instruction-based image editing | Pollinations.ai (FLUX family) | ⭐⭐⭐⭐⭐ |
+| FLUX.1 Kontext ⭐ | ~12B | Instruction-based image editing | Pollinations.ai (FLUX family) | ⭐⭐⭐⭐⭐ |
+| **GPT Image 1.5 Low** | N/A (closed) | Flagship img2img editing, low quality | OpenAI | ⭐⭐⭐⭐⭐ |
+| **GPT Image 1.5 Medium** | N/A (closed) | Flagship img2img editing, medium quality, best text rendering | OpenAI | ⭐⭐⭐⭐⭐ |
+| **Gemini 2.5 Flash Image** (NanaBanana V1) | N/A (closed) | Instruction-based image editing | NanaBanana API | ⭐⭐⭐⭐ |
+| **Gemini 3.1 Flash Image** (NanaBanana V2) | N/A (closed) | Instruction-based image editing, up to 14 reference images, Google Search grounding | NanaBanana API | ⭐⭐⭐⭐⭐ |
+| **Gemini 3 Pro Image** (NanaBanana Pro) | N/A (closed) | Instruction-based image editing, maximum fidelity, up to 8 reference images | NanaBanana API | ⭐⭐⭐⭐⭐ |
 
 ### **Price Comparison**
 
-All figures below are per single output image. Pollinations prices verified live against `GET https://gen.pollinations.ai/models`.
+All figures below are per single output image. Prices verified against official provider pricing pages (June 2026).
+
+- **NanaBanana API** pricing: $5 = 1,000 credits ($0.005/credit). All tiers use 1K resolution. Costs: V1 (low) = 4 credits, V2 (medium) = 8 credits, Pro (max) = 18 credits.
+- **Pollinations.ai** Kontext pricing: ~200 images per 1 Pollen ($1) = **~$0.005/image**.
+- **OpenAI** `gpt-image-1.5` pricing: low quality ~$0.009/image, medium quality ~$0.034/image (flagship model, Dec 2025).
 
 | Tier | Model | Provider | Task | Approx. cost per image | Approx. latency | Notes |
 |------|-------|----------|------|------------------------|-----------------|-------|
 | **Budget** ⭐ | `flux-schnell` | Pixazo.ai | **text-to-image** | **~$0.0012** | ~4–6 s | Cheapest option, no source image needed |
-| Default | `gpt-image-1-mini` (low) | OpenAI | image-to-image | ~$0.011 | ~5–8 s | Already paid OpenAI account |
-| Standard | `kontext` (FLUX.1 Kontext) | Pollinations.ai | image-to-image | ~$0.04 (0.04 Pollen) | ~6–10 s | $2 ≈ 50 edits |
-| AI Reasoning | `gpt-image-1-mini` (high) | OpenAI | image-to-image | ~$0.167 | ~20–30 s | Premium quality |
+| Default ⭐ | `kontext` (FLUX.1 Kontext) | Pollinations.ai | image-to-image | **~$0.005** | ~6–10 s | ~200 images per $1 Pollen, default tier |
+| GPT15 Low | `gpt-image-1.5-low` | OpenAI | image-to-image | **~$0.009** | ~5–10 s | OpenAI flagship at lowest quality |
+| NanaBanana Low | `nanobanana-low` (Gemini 2.5 Flash) | NanaBanana API | image-to-image | **~$0.020** (4 credits) | ~8–15 s | Entry NanaBanana tier |
+| NanaBanana Medium | `nanobanana-medium` (Gemini 3.1 Flash) | NanaBanana API | image-to-image | **~$0.040** (8 credits) | ~10–20 s | Up to 14 ref. images, Google Search grounding |
+| NanaBanana Max | `nanobanana-max` (Gemini 3 Pro) | NanaBanana API | image-to-image | **~$0.090** (18 credits) | ~15–25 s | Maximum fidelity, up to 8 ref. images |
+| GPT15 Medium | `gpt-image-1.5-medium` | OpenAI | image-to-image | **~$0.034** | ~15–25 s | OpenAI flagship mid quality, best text rendering |
 
 **Bottom line:**
 - For *text-to-image generation*: **`flux-schnell` on Pixazo** — ~$0.0012 each, cheapest option, no source image required.
-- For *everyday cheap edits*: **`gpt-image-1-mini-low`** — ~$0.011 each, predictable, already on OpenAI billing.
-- For *high-quality instruction-based editing*: **`kontext` (FLUX.1 Kontext) on Pollinations** — best img2img model in the FLUX family.
-- For *complex reasoning prompts*: **`gpt-image-1-mini-high`** (AI Reasoning tier).
+- For *everyday cheap img2img*: **`kontext` (FLUX.1 Kontext) on Pollinations** — ~$0.005 each, default tier.
+- For *OpenAI flagship editing at low cost*: **`gpt-image-1.5-low`** — ~$0.009 each, best prompt adherence at low quality.
+- For *affordable Gemini-based image editing*: **`nanobanana-low`** (Gemini 2.5 Flash) — ~$0.020 each.
+- For *multi-image blending or Google Search grounding*: **`nanobanana-medium`** (Gemini 3.1 Flash) — ~$0.040, up to 14 reference images.
+- For *maximum fidelity NanaBanana output*: **`nanobanana-max`** (Gemini 3 Pro) — ~$0.090 each.
+- For *best OpenAI quality with text rendering*: **`gpt-image-1.5-medium`** — ~$0.034 each, OpenAI flagship mid tier.
 
 ### **Advantages & Disadvantages**
 
 | Model | Advantages | Disadvantages |
 |-------|------------|---------------|
-| **GPT Image 1 Mini (low)** ⭐ | • Cheapest reliable hosted img2img (~$0.011)<br>• Same SDK as AI Reasoning tier (one client, two qualities)<br>• Predictable per-image pricing<br>• Already on the project's OpenAI account | • Closed source / vendor lock-in<br>• Fixed sizes only (1024², 1024×1536, 1536×1024)<br>• Lower visual fidelity than `medium`/`high` |
-| FLUX.1 Kontext (Pollinations) | • State-of-the-art instruction-based img2img<br>• Open-source, non-corporate platform<br>• OpenAI-compatible REST API<br>• Pay-as-you-go in Pollen credits, no minimum top-up | • ~4× more expensive than Default<br>• Pollinations is in beta — daily grants are tiny, real use needs a top-up |
-| GPT Image 1 Mini (high) | • Best results on complex / natural prompts<br>• Reliable hosted API<br>• Predictable per-image pricing | • Most expensive option ($0.167/img)<br>• Slowest (~20–30 s)<br>• Closed source / vendor lock-in |
+| **FLUX.1 Kontext (Pollinations)** ⭐ | • Cheapest img2img (~$0.005)<br>• State-of-the-art FLUX instruction-based editing<br>• Pay-as-you-go, no minimum top-up<br>• Default tier for all users | • Pollinations is in beta — daily grants tiny, real use needs top-up<br>• No text-to-image support |
+| **GPT Image 1.5 Low** | • OpenAI flagship model at lowest cost (~$0.009)<br>• Best prompt adherence vs Kontext<br>• Reliable hosted API, predictable pricing | • 2× more expensive than Kontext<br>• Closed source / vendor lock-in<br>• Fixed sizes only (1024², 1024×1536, 1536×1024) |
+| **NanaBanana Low** (Gemini 2.5 Flash) | • Cheapest NanaBanana img2img tier (~$0.020)<br>• Async with webhook callback (matches PixPro architecture) | • More expensive than Default/GPT15 Low tiers<br>• Requires NanaBanana API key |
+| **NanaBanana Medium** (Gemini 3.1 Flash) | • Up to 14 reference images per request<br>• Google Search grounding for real-world accuracy<br>• Async with webhook callback | • ~$0.040/image<br>• Credit-based billing ($5 minimum top-up) |
+| **NanaBanana Max** (Gemini 3 Pro) | • Maximum fidelity output<br>• Up to 8 reference images per request<br>• Most precise control over complex prompts | • Most expensive NanaBanana tier (~$0.090)<br>• Slowest of the three NanaBanana models |
+| **GPT Image 1.5 Medium** | • Best text rendering of all tiers<br>• OpenAI flagship mid quality<br>• Supports `input_fidelity=high` for up to 5 reference images | • ~$0.034/image — more expensive than nb-low<br>• Closed source / vendor lock-in |
 
-### **Why GPT Image 1 Mini (low) as Default**
+### **Why FLUX.1 Kontext (Pollinations) as Default**
 
-- **Cheap and predictable** — ~$0.011/image, billed per call on the OpenAI account already used by the project
-- **No new provider to manage** — same SDK and key as the AI Reasoning tier; only the `quality` param changes
-- **Reliable hosted API** — OpenAI is production-grade, unlike beta platforms with tiny daily grants
-- **Same image-edit endpoint** as the high-quality tier, so behavior is consistent across tiers
-- **No minimum top-up** — you spend exactly what you generate, down to fractions of a cent
+- **Cheapest img2img** — ~$0.005/image, same price floor as the old gpt-image-1-mini-low
+- **State-of-the-art FLUX model** — instruction-based editing with excellent prompt adherence
+- **No minimum top-up** — pay-as-you-go in Pollen credits, spend exactly what you generate
+- **No separate heavy SDK** — simple HTTP call to Pollinations API
+- **Easy to upgrade** — users can step up to `gpt-image-1.5-low` (~$0.009) for OpenAI flagship quality
 
 ### **Model Selection Logic**
 
 ```python
 class ModelTier(Enum):
-    PIXAZO       = "flux-schnell"           # Pixazo Flux Schnell                   (~$0.0012/img)  [text-to-image]
-    DEFAULT      = "gpt-image-1-mini-low"   # OpenAI gpt-image-1-mini, quality=low  (~$0.011/img)   [image-to-image]
-    STANDARD     = "kontext"                # Pollinations FLUX.1 Kontext           (~$0.04/img)    [image-to-image]
-    AI_REASONING = "gpt-image-1-mini-high"  # OpenAI gpt-image-1-mini, quality=high (~$0.167/img)   [image-to-image]
+    PIXAZO            = "flux-schnell"          # Pixazo Flux Schnell                    (~$0.0012/img) [text-to-image]
+    DEFAULT           = "kontext"               # Pollinations FLUX.1 Kontext            (~$0.005/img)  [image-to-image]
+    GPT15_LOW         = "gpt-image-1.5-low"     # OpenAI gpt-image-1.5, quality=low      (~$0.009/img)  [image-to-image]
+    NANOBANANA_LOW    = "nanobanana-low"        # NanaBanana V1 Gemini 2.5 Flash         (~$0.020/img)  [image-to-image]
+    NANOBANANA_MEDIUM = "nanobanana-medium"     # NanaBanana V2 Gemini 3.1 Flash         (~$0.040/img)  [image-to-image]
+    NANOBANANA_MAX    = "nanobanana-max"        # NanaBanana Pro Gemini 3 Pro            (~$0.090/img)  [image-to-image]
+    GPT15_MEDIUM      = "gpt-image-1.5-medium" # OpenAI gpt-image-1.5, quality=medium   (~$0.034/img)  [image-to-image]
 ```
 
-The user can explicitly select a tier via the `model` parameter in the upload event. If no model is specified, the system uses **`gpt-image-1-mini-low`** — the cheapest reliable option, paid for on the existing OpenAI account.
+The user can explicitly select a tier via the `model` parameter in the upload event. If no model is specified, the system uses **`kontext`** — the cheapest reliable img2img option.
+
+### **NanaBanana API Integration**
+
+NanaBanana API (`nanobananaapi.ai`) provides access to Google Gemini image models at over 50% off official Google pricing. PixPro uses all three NanaBanana models at **1K resolution**, mapped as low / medium / max tiers.
+
+**Base URL:** `https://api.nanobananaapi.ai/api/v1/nanobanana`
+
+**Authentication:** `Authorization: Bearer NANOBANANA_API_KEY`
+
+**Credit pricing:** $5 = 1,000 credits ($0.005/credit)
+
+| Tier | Model | Endpoint | Credits/call (1K) | Cost/image |
+|------|-------|----------|-------------------|------------|
+| `nanobanana-low` | NanaBanana V1 (Gemini 2.5 Flash) | `POST /generate` | 4 | **$0.020** |
+| `nanobanana-medium` | NanaBanana V2 (Gemini 3.1 Flash) | `POST /generate-2` | 8 | **$0.040** |
+| `nanobanana-max` | NanaBanana Pro (Gemini 3 Pro) | `POST /generate-pro` | 18 | **$0.090** |
+| — | Get Task Details | `GET /record-info` | 0 | free |
+
+All three models share the same **async flow**: `POST → { taskId }` → poll `GET /record-info?taskId=` OR receive result via `callBackUrl` webhook.
+
+**Task status codes** (`successFlag`):
+- `0` — GENERATING
+- `1` — SUCCESS → `resultImageUrl` available
+- `2` — CREATE_TASK_FAILED
+- `3` — GENERATE_FAILED
+
+**Callback payload** (POST to `callBackUrl`):
+```json
+{
+  "code": 200,
+  "msg": "Image generated successfully.",
+  "data": {
+    "taskId": "<task-id>",
+    "info": { "resultImageUrl": "https://..." }
+  }
+}
+```
+
+---
+
+#### **NanaBanana Low** — `POST /generate` (Gemini 2.5 Flash)
+
+Parameters differ from V2/Pro — uses `type` field instead of `imageUrls` mode:
+
+```python
+{
+    "prompt": "<user prompt>",
+    "type": "TEXTTOIAMGE",      # "TEXTTOIAMGE" | "IMAGETOIAMGE"
+    "numImages": 1,             # 1–4
+    "imageUrls": [],            # required for IMAGETOIAMGE mode
+    "image_size": "1:1",        # 1:1 | 9:16 | 16:9 | 3:4 | 4:3 | 3:2 | 2:3 | 5:4 | 4:5 | 21:9
+    "callBackUrl": "<pixpro-callback-url>"
+}
+```
+
+> Note: V1 does **not** support `resolution`, `aspectRatio`, `outputFormat`, or `googleSearch`.
+
+---
+
+#### **NanaBanana Medium** — `POST /generate-2` (Gemini 3.1 Flash)
+
+```python
+{
+    "prompt": "<user prompt>",  # up to 20,000 characters
+    "imageUrls": ["<source-image-url>"],  # required: source image URL(s) for image-to-image (up to 14)
+    "aspectRatio": "1:1",       # 1:1 | 1:4 | 1:8 | 2:3 | 3:2 | 3:4 | 4:1 | 4:3 | 4:5 | 5:4 | 8:1 | 9:16 | 16:9 | 21:9 | auto
+    "resolution": "1K",         # 1K | 2K | 4K  (PixPro uses 1K)
+    "outputFormat": "jpg",      # jpg | png
+    "googleSearch": False,      # True = enable Google Web Search grounding
+    "callBackUrl": "<pixpro-callback-url>"
+}
+```
+
+---
+
+#### **NanaBanana Max** — `POST /generate-pro` (Gemini 3 Pro)
+
+```python
+{
+    "prompt": "<user prompt>",
+    "imageUrls": ["<source-image-url>"],  # required: source image URL(s) for image-to-image (up to 8)
+    "resolution": "1K",         # 1K | 2K | 4K  (PixPro uses 1K)
+    "aspectRatio": "1:1",       # 1:1 | 2:3 | 3:2 | 3:4 | 4:3 | 4:5 | 5:4 | 9:16 | 16:9 | 21:9 | auto
+    "callBackUrl": "<pixpro-callback-url>"  # required
+}
+```
+
+> Note: Pro does **not** support `googleSearch` or `outputFormat`.
+
+---
+
+**Processor files:** `src/Services/IA/app/processors/nanobanana_low.py`, `nanobanana_medium.py`, `nanobanana_max.py`
 
 
 ## **Credit System Architecture**
@@ -174,21 +291,24 @@ Credit enforcement lives in the **Projects Service** — it acts as the gate *be
 
 | Model | Free Credits | Credits per Image | Notes |
 |-------|-------------|-------------------|-------|
-| `gpt-image-1-mini-low` | **5** | 1 | Cheapest img2img option |
-| `kontext` (Pollinations) | **3** | 1 | Standard quality |
-| `gpt-image-1-mini-high` | **1** | 1 | Premium quality |
+| `kontext` (Pollinations) | **5** | 1 | Default img2img (~$0.005) |
+| `gpt-image-1.5-low` | **3** | 1 | OpenAI flagship low quality (~$0.009) |
+| `nanobanana-low` (NanaBanana V1) | **3** | 1 | Entry NanaBanana — Gemini 2.5 Flash (~$0.020) |
+| `nanobanana-medium` (NanaBanana V2) | **2** | 1 | Mid NanaBanana — Gemini 3.1 Flash (~$0.040) |
+| `nanobanana-max` (NanaBanana Pro) | **1** | 1 | Max NanaBanana — Gemini 3 Pro (~$0.090) |
+| `gpt-image-1.5-medium` | **1** | 1 | OpenAI flagship medium quality (~$0.034) |
 | `flux-schnell` (Pixazo) | **Unlimited** | — | Text-to-image, cheapest tier, no credit gate |
 
 ### **Subscription Tiers (Future)**
 
 Subscriptions expand the monthly credit pool. Exact pricing TBD.
 
-| Tier | `gpt-image-1-mini-low` | `kontext` | `gpt-image-1-mini-high` | Reset |
-|------|------------------------|-----------|--------------------------|-------|
-| **Free** | 5 total | 3 total | 1 total | Never (one-time grant) |
-| **Basic** | N / month | N / month | N / month | Monthly |
-| **Pro** | N / month | N / month | N / month | Monthly |
-| **Unlimited** | ∞ | ∞ | ∞ | — |
+| Tier | Price | `kontext` | `gpt15-low` | `nb-low` | `nb-medium` | `nb-max` | `gpt15-medium` | Reset |
+|------|-------|-----------|-------------|----------|-------------|----------|----------------|-------|
+| **Free** | $0 | 5 | 3 | 3 | 2 | 1 | 1 | Never (one-time grant) |
+| **Basic** | $4.99/mo | 140 | 100 | 35 | 17 | 7 | 10 | Monthly |
+| **Pro** | $14.99/mo | 420 | 300 | 105 | 52 | 21 | 30 | Monthly |
+| **Unlimited** | TBD | ∞ | ∞ | ∞ | ∞ | ∞ | ∞ | — |
 
 > `N` values to be defined when subscription pricing is established.
 
@@ -206,7 +326,7 @@ Owned by the **Projects Service** database (same DB that holds User → Project 
 user_credits
 ├── id                UUID          PRIMARY KEY
 ├── user_id           UUID          NOT NULL  FK → users.id
-├── model_tier        ENUM          NOT NULL  (gpt_mini_low | kontext | gpt_mini_high)
+├── model_tier        ENUM          NOT NULL  (gpt_mini_low | kontext | nanobanana_low | nanobanana_medium | nanobanana_max | gpt_mini_high)
 ├── credits_remaining INT           NOT NULL  DEFAULT 0
 ├── credits_total     INT           NOT NULL  DEFAULT 0   -- max for current subscription period
 ├── subscription_tier ENUM          NOT NULL  DEFAULT 'free'  (free | basic | pro | unlimited)
@@ -229,7 +349,7 @@ HTTP Request → Projects Service
      └─ Regular user → continue
   2. Identify model_tier from request parameters
      ├─ flux-schnell → skip credit check (unlimited) → publish event
-     └─ gpt_mini_low | kontext | gpt_mini_high → continue
+     └─ gpt_mini_low | kontext | nanobanana_low | nanobanana_medium | nanobanana_max | gpt_mini_high → continue
   3. SELECT credits_remaining FROM user_credits
      WHERE user_id = ? AND model_tier = ?
      ├─ credits_remaining = 0 → return 402 INSUFFICIENT_CREDITS
@@ -331,11 +451,13 @@ flowchart TB
         F2 --> G2[IA Service<br/>Python]
         G2 --> H2{Content Check}
         H2 -->|Pass| I2{Model Selection}
-        I2 -->|flux-schnell| J2[Pixazo]
-        I2 -->|gpt-image-1-mini-low| K2[OpenAI Low Quality]
-        I2 -->|kontext| L2[Pollinations]
-        I2 -->|gpt-image-1-mini-high| M2[OpenAI High Quality]
-        J2 & K2 & L2 & M2 --> N2[Cloudinary: Store result]
+        I2 -->|kontext| J2[Pollinations FLUX.1 Kontext]
+        I2 -->|gpt-image-1.5-low| K2[OpenAI GPT1.5 Low]
+        I2 -->|nanobanana-low| L2[NanaBanana V1]
+        I2 -->|nanobanana-medium| L3[NanaBanana V2]
+        I2 -->|nanobanana-max| L4[NanaBanana Pro]
+        I2 -->|gpt-image-1.5-medium| M2[OpenAI GPT1.5 Medium]
+        J2 & K2 & L2 & L3 & L4 & M2 --> N2[Cloudinary: Store result]
         N2 --> O2[PostgreSQL: Save record]
         O2 --> P2[Publish completion]
         H2 -->|Blocked| Q2[Return error: CONTENT_MODERATION_VIOLATION]
@@ -412,13 +534,15 @@ flowchart TD
     E -->|other| G[Invalid: text-to-image<br/>only supports flux-schnell]
     
     D --> H{model parameter}
-    H -->|gpt-image-1-mini-low| I[OpenAI Low Quality<br/>$0.011/img]
-    H -->|kontext| J[Pollinations FLUX.1 Kontext<br/>$0.04/img]
-    H -->|gpt-image-1-mini-high| K[OpenAI High Quality<br/>$0.167/img]
-    H -->|flux-schnell| L[Pixazo Flux Schnell<br/>$0.0012/img]
-    H -->|none/default| M[OpenAI Low Quality<br/>$0.011/img]
+    H -->|kontext| J[Pollinations FLUX.1 Kontext<br/>$0.005/img]
+    H -->|gpt-image-1.5-low| I[OpenAI GPT1.5 Low<br/>$0.009/img]
+    H -->|nanobanana-low| NB1[NanaBanana V1<br/>$0.020/img]
+    H -->|nanobanana-medium| NB2[NanaBanana V2<br/>$0.040/img]
+    H -->|nanobanana-max| NB3[NanaBanana Pro<br/>$0.090/img]
+    H -->|gpt-image-1.5-medium| K[OpenAI GPT1.5 Medium<br/>$0.034/img]
+    H -->|none/default| M[Pollinations Kontext<br/>$0.005/img]
     
-    F & I & J & K & L & M --> N[Content Moderation Check]
+    F & I & J & NB1 & NB2 & NB3 & K & M --> N[Content Moderation Check]
     N -->|Pass| O[Process with AI]
     N -->|Fail| P[Return CONTENT_MODERATION_VIOLATION]
 ```
@@ -808,8 +932,9 @@ flowchart TD
 
 **External AI Providers:**
 - **Pixazo.ai** - Flux Schnell for text-to-image ($0.0012/img)
-- **OpenAI** - GPT Image 1 Mini for image editing ($0.011-$0.167/img)
-- **Pollinations.ai** - FLUX.1 Kontext for image editing ($0.04/img)
+- **OpenAI** - GPT Image 1.5 for image editing ($0.009–$0.034/img, low/medium quality)
+- **Pollinations.ai** - FLUX.1 Kontext for image editing ($0.005/img)
+- **NanaBanana API** - Gemini 2.5 Flash / 3.1 Flash / 3 Pro for image editing ($0.020–$0.090/img)
 
 **Infrastructure:**
 - **Cloudinary** - Stores all images (original and generated)
@@ -831,7 +956,7 @@ When sending an image for processing, you can customize the AI behavior with the
 | `strength` | float | 0.0-1.0 | 0.75 | How much AI can change the original image (image-to-image only) |
 | `guidance_scale` | float | 1.0-20.0 | 7.5 | How closely AI follows the prompt (Pollinations only) |
 | `quantity` | int | 1-10 | 1 | Number of image variations to generate |
-| `model` | string | - | `gpt-image-1-mini-low` | AI model to use. Options: `flux-schnell`, `gpt-image-1-mini-low`, `kontext`, `gpt-image-1-mini-high` |
+| `model` | string | - | `kontext` | AI model to use. Options: `flux-schnell` (txt2img), `kontext`, `gpt-image-1.5-low`, `nanobanana-low`, `nanobanana-medium`, `nanobanana-max`, `gpt-image-1.5-medium` (all img2img) |
 
 ### **Usage Examples**
 
@@ -949,10 +1074,13 @@ strength=0.2          strength=0.5          strength=0.9
 
 | Model | Best For | Task | Cost | Quality |
 |-------|----------|------|------|---------|
-| `flux-schnell` | Text-to-image generation | Text → Image | ⭐⭐⭐⭐⭐ Cheapest | ⭐⭐⭐⭐ |
-| `gpt-image-1-mini-low` | Everyday image editing | Image → Image | ⭐ Cheapest | ⭐⭐⭐⭐ |
-| `kontext` | High-quality instruction editing | Image → Image | 💰💰 Medium | ⭐⭐⭐⭐⭐ |
-| `gpt-image-1-mini-high` | Complex reasoning edits | Image → Image | 💰💰💰 Premium | ⭐⭐⭐⭐⭐ |
+| `flux-schnell` | Text-to-image generation | **Text → Image** | ⭐⭐⭐⭐⭐ ~$0.0012 | ⭐⭐⭐⭐ |
+| `kontext` | Default cheap img2img | Image → Image | ⭐⭐⭐⭐⭐ ~$0.005 | ⭐⭐⭐⭐⭐ |
+| `gpt-image-1.5-low` | OpenAI flagship at lowest cost | Image → Image | ⭐⭐⭐⭐ ~$0.009 | ⭐⭐⭐⭐⭐ |
+| `nanobanana-low` | Gemini-based editing, entry tier | Image → Image | ⭐⭐⭐ ~$0.020 | ⭐⭐⭐⭐ |
+| `nanobanana-medium` | Multi-reference editing, Search grounding | Image → Image | 💰💰 ~$0.040 | ⭐⭐⭐⭐⭐ |
+| `nanobanana-max` | Maximum fidelity editing | Image → Image | 💰💰💰 ~$0.090 | ⭐⭐⭐⭐⭐ |
+| `gpt-image-1.5-medium` | Best text rendering, OpenAI flagship mid | Image → Image | 💰💰 ~$0.034 | ⭐⭐⭐⭐⭐ |
 
 ---
 
@@ -975,7 +1103,7 @@ flowchart TD
     D -->|No| E[Query user_credits table\nWHERE user_id + model_tier]
 
     E --> F{Row exists?}
-    F -->|No — first time| G[SeedFreeCredits\ngpt_mini_low=5\nkontext=3\ngpt_mini_high=1]
+    F -->|No — first time| G[SeedFreeCredits\nkontext=5 · gpt15_low=3\nnanobanana_low=3 · nanobanana_medium=2\nnanobanana_max=1 · gpt15_medium=1]
     G --> E
 
     F -->|Yes| H{credits_remaining > 0?}
@@ -1013,17 +1141,20 @@ sequenceDiagram
 
     U->>IC: POST /api/images/upload (first ever request)
     IC->>IS: UploadAsync(request, isAdmin=false)
-    IS->>CS: TryDeductCreditAsync(userId, GptMiniLow)
-    CS->>DB: SELECT WHERE user_id=? AND model_tier=GptMiniLow
+    IS->>CS: TryDeductCreditAsync(userId, Kontext)
+    CS->>DB: SELECT WHERE user_id=? AND model_tier=Kontext
     DB-->>CS: (empty — no rows)
 
     CS->>CS: SeedFreeCreditsAsync(userId)
-    CS->>DB: INSERT user_credits (GptMiniLow, remaining=5, total=5)
-    CS->>DB: INSERT user_credits (Kontext, remaining=3, total=3)
-    CS->>DB: INSERT user_credits (GptMiniHigh, remaining=1, total=1)
-    DB-->>CS: 3 rows inserted
+    CS->>DB: INSERT user_credits (Kontext, remaining=5, total=5)
+    CS->>DB: INSERT user_credits (Gpt15Low, remaining=3, total=3)
+    CS->>DB: INSERT user_credits (NanabananaLow, remaining=3, total=3)
+    CS->>DB: INSERT user_credits (NanabanaMedium, remaining=2, total=2)
+    CS->>DB: INSERT user_credits (NanabanaMax, remaining=1, total=1)
+    CS->>DB: INSERT user_credits (Gpt15Medium, remaining=1, total=1)
+    DB-->>CS: 6 rows inserted
 
-    CS->>DB: SELECT WHERE user_id=? AND model_tier=GptMiniLow
+    CS->>DB: SELECT WHERE user_id=? AND model_tier=Kontext
     DB-->>CS: { remaining: 5 }
 
     CS->>DB: UPDATE SET remaining=4 WHERE remaining > 0

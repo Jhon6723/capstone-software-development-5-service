@@ -165,9 +165,12 @@ PATCH /api/projects/admin/users/{userId}/subscription
 Body:
 {
   "subscriptionTier": "pro",
-  "creditsLow": 100,
-  "creditsKontext": 50,
-  "creditsHigh": 10,
+  "creditsKontext": 420,
+  "creditsGpt15Low": 300,
+  "creditsNanobananaLow": 105,
+  "creditsNanabanaMedium": 52,
+  "creditsNanabanaMax": 21,
+  "creditsGpt15Medium": 30,
   "resetAt": "2025-07-04T00:00:00Z"   // null for unlimited tier
 }
 
@@ -176,9 +179,12 @@ Response 200:
   "userId": "uuid",
   "subscriptionTier": "pro",
   "credits": {
-    "gpt_mini_low": 100,
-    "kontext": 50,
-    "gpt_mini_high": 10
+    "kontext": 420,
+    "gpt15_low": 300,
+    "nanobanana_low": 105,
+    "nanobanana_medium": 52,
+    "nanobanana_max": 21,
+    "gpt15_medium": 30
   },
   "resetAt": "2025-07-04T00:00:00Z"
 }
@@ -195,9 +201,12 @@ Response 200:
   "userId": "uuid",
   "subscriptionTier": "free",
   "credits": [
-    { "modelTier": "gpt_mini_low",  "remaining": 3, "total": 5 },
-    { "modelTier": "kontext",       "remaining": 1, "total": 3 },
-    { "modelTier": "gpt_mini_high", "remaining": 0, "total": 1 }
+    { "modelTier": "kontext",           "remaining": 4, "total": 5 },
+    { "modelTier": "gpt15_low",         "remaining": 2, "total": 3 },
+    { "modelTier": "nanobanana_low",    "remaining": 2, "total": 3 },
+    { "modelTier": "nanobanana_medium", "remaining": 1, "total": 2 },
+    { "modelTier": "nanobanana_max",    "remaining": 0, "total": 1 },
+    { "modelTier": "gpt15_medium",      "remaining": 0, "total": 1 }
   ],
   "resetAt": null
 }
@@ -267,7 +276,7 @@ payment_records
 ├── provider_payment_id VARCHAR(255)    NOT NULL   UNIQUE
 ├── payment_type        VARCHAR(50)     NOT NULL   (subscription | credit_topup)   -- NEW
 ├── subscription_tier   VARCHAR(50)     NULLABLE   (basic | pro | unlimited)       -- NULL for credit_topup
-├── model_tier          VARCHAR(50)     NULLABLE   (gpt_mini_low | kontext | gpt_mini_high) -- NULL for subscription
+├── model_tier          VARCHAR(50)     NULLABLE   (kontext | gpt15_low | nanobanana_low | nanobanana_medium | nanobanana_max | gpt15_medium) -- NULL for subscription
 ├── credits_purchased   INT             NULLABLE                                   -- NULL for subscription
 ├── amount              DECIMAL(10,2)   NOT NULL
 ├── currency            VARCHAR(10)     NOT NULL
@@ -286,9 +295,12 @@ Published to `payment-events` Fanout Exchange. Consumed by the Projects Service.
   "EventType": "SubscriptionActivatedEvent",
   "UserId": "uuid",
   "SubscriptionTier": "pro",
-  "CreditsLow": 100,
-  "CreditsKontext": 50,
-  "CreditsHigh": 10,
+  "CreditsKontext": 420,
+  "CreditsGpt15Low": 300,
+  "CreditsNanobananaLow": 105,
+  "CreditsNanabanaMedium": 52,
+  "CreditsNanabanaMax": 21,
+  "CreditsGpt15Medium": 30,
   "ValidFrom": "2025-06-04T00:00:00Z",
   "ValidUntil": "2025-07-04T00:00:00Z",
   "PaymentProvider": "stripe",
@@ -296,7 +308,14 @@ Published to `payment-events` Fanout Exchange. Consumed by the Projects Service.
 }
 ```
 
-> Credits per tier (`CreditsLow`, `CreditsKontext`, `CreditsHigh`) are defined in the Payment Service config, not hardcoded per event. This allows changing tier allocations without redeploying Projects Service.
+> Credits per tier are defined in the Payment Service config, not hardcoded per event. This allows changing tier allocations without redeploying Projects Service.
+>
+> **Credit allocations by tier:**
+> | Tier | Price | `kontext` | `gpt15_low` | `nanobanana_low` | `nanobanana_medium` | `nanobanana_max` | `gpt15_medium` |
+> |------|-------|-----------|-------------|-----------------|---------------------|-----------------|----------------|
+> | Basic | $4.99/mo | 140 | 100 | 35 | 17 | 7 | 10 |
+> | Pro | $14.99/mo | 420 | 300 | 105 | 52 | 21 | 30 |
+> | Unlimited | TBD | ∞ | ∞ | ∞ | ∞ | ∞ | ∞ |
 
 ### **`CreditPurchasedEvent` (RabbitMQ)**
 
@@ -306,14 +325,14 @@ Published when a user purchases a one-time credit top-up pack. Consumed by the P
 {
   "EventType": "CreditPurchasedEvent",
   "UserId": "uuid",
-  "ModelTier": "gpt_mini_high",
-  "CreditsPurchased": 30,
+  "ModelTier": "nanobanana_medium",
+  "CreditsPurchased": 12,
   "PaymentProvider": "stripe",
   "PaymentRecordId": "uuid"
 }
 ```
 
-> `CreditsPurchased` is resolved by the Payment Service from its config (e.g. `$1 → 30 credits for gpt_mini_high`). The Projects Service only applies the delta — it does not know the price.
+> `CreditsPurchased` is resolved by the Payment Service from its config (e.g. `$1 → 12 credits for nanobanana_medium`). The Projects Service only applies the delta — it does not know the price.
 
 #### **How the Payment Service resolves `CreditsPurchased`**
 
@@ -326,11 +345,16 @@ This means the Projects Service is completely price-agnostic — it only receive
 
 #### **Credit Top-Up — Pricing table**
 
-| Model Tier | Credits per $1 | Approx. real cost per image | Notes |
-|------------|---------------|------------------------------|-------|
-| `gpt_mini_low` | **100** | ~$0.01 | Cheapest img2img option |
-| `kontext` | **60** | ~$0.017 | Standard quality |
-| `gpt_mini_high` | **30** | ~$0.033 | Premium quality |
+Top-up prices carry a ~2× markup over API cost to incentivize subscriptions over one-time purchases:
+
+| Model Tier | Credits per $1 | Cost per image | API cost | Markup | Notes |
+|------------|----------------|----------------|----------|--------|-------|
+| `kontext` | **100** | ~$0.010 | $0.005 | 2× | Default img2img (Pollinations) |
+| `gpt15_low` | **55** | ~$0.018 | $0.009 | 2× | OpenAI GPT Image 1.5 low |
+| `nanobanana_low` | **25** | ~$0.040 | $0.020 | 2× | Entry NanaBanana tier |
+| `nanobanana_medium` | **12** | ~$0.083 | $0.040 | 2× | Mid NanaBanana tier |
+| `nanobanana_max` | **3** | ~$0.333 | $0.090 | 3.7× | Max NanaBanana tier |
+| `gpt15_medium` | **14** | ~$0.071 | $0.034 | 2.1× | OpenAI GPT Image 1.5 medium |
 
 > Pricing values are **configurable** in `CreditPacks` appsettings — no redeployment needed to adjust them.
 
@@ -370,7 +394,7 @@ sequenceDiagram
     PROJ->>UDB: UPDATE user_credits
     Note over PROJ,UDB: SET credits_remaining = credits_remaining + 30,
     Note over PROJ,UDB: credits_total = credits_total + 30
-    Note over PROJ,UDB: WHERE user_id = ? AND model_tier = 'gpt_mini_high'
+    Note over PROJ,UDB: WHERE user_id = ? AND model_tier = 'gpt15_medium'
 ```
 
 #### **Credit Pack Config (Payment Service)**
@@ -380,9 +404,12 @@ Stored in appsettings / environment variables so values can be updated without r
 ```json
 "CreditPacks": {
   "PriceUsd": 1.00,
-  "GptMiniLow":  100,
-  "Kontext":      60,
-  "GptMiniHigh":  30
+  "Kontext":        100,
+  "Gpt15Low":        55,
+  "NanobananaLow":   25,
+  "NanabanaMedium":  12,
+  "NanabanaMax":      3,
+  "Gpt15Medium":     14
 }
 ```
 
@@ -394,7 +421,7 @@ POST /api/payments/credits/checkout
 
 Body:
 {
-  "modelTier": "gpt_mini_high"   // gpt_mini_low | kontext | gpt_mini_high
+  "modelTier": "nanobanana_medium"   // kontext | gpt15_low | nanobanana_low | nanobanana_medium | nanobanana_max | gpt15_medium
 }
 
 Response 200:
@@ -637,9 +664,12 @@ Response 200:
     "unlimited": 15
   },
   "topUpsByTier": {
-    "gpt_mini_low": 100,
-    "kontext": 70,
-    "gpt_mini_high": 40
+    "kontext": 120,
+    "gpt15_low": 80,
+    "nanobanana_low": 45,
+    "nanobanana_medium": 30,
+    "nanobanana_max": 12,
+    "gpt15_medium": 35
   }
 }
 ```
