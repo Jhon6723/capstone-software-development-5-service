@@ -256,3 +256,4 @@ tests/ia_python_tests/app/
 
 # Test results directory
 tests/TestResults/
+.windsurf
