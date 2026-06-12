@@ -133,6 +133,37 @@ public class AuthController : ControllerBase
         });
     }
 
+    /// <summary>
+    /// Block a user account (admin only)
+    /// </summary>
+    [HttpPut("users/{userId:guid}/block")]
+    [Authorize(Policy = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> BlockUser(Guid userId, CancellationToken cancellationToken)
+    {
+        _logger.LogWarning("[ADMIN] Blocking user: {UserId}", userId);
+        var result = await _authService.BlockUserAsync(userId, cancellationToken);
+        if (result.IsSuccess) return NoContent();
+        return HandleErrorResult(result.Error!);
+    }
+
+    /// <summary>
+    /// Unblock a user account (admin only)
+    /// </summary>
+    [HttpPut("users/{userId:guid}/unblock")]
+    [Authorize(Policy = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> UnblockUser(Guid userId, CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("[ADMIN] Unblocking user: {UserId}", userId);
+        var result = await _authService.UnblockUserAsync(userId, cancellationToken);
+        if (result.IsSuccess) return NoContent();
+        return HandleErrorResult(result.Error!);
+    }
+
     [HttpGet("health")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public IActionResult Health() =>

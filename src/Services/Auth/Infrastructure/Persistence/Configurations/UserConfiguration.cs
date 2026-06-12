@@ -39,6 +39,12 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
             .IsRequired()
             .HasDefaultValue(UserRole.User);
 
+        builder.Property(u => u.IsActive)
+            .HasColumnName("is_active")
+            .HasColumnType("boolean")
+            .IsRequired()
+            .HasDefaultValue(true);
+
         builder.Property(u => u.CreatedAt)
             .HasColumnName("created_at")
             .HasColumnType("timestamptz")

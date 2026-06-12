@@ -169,6 +169,14 @@ public sealed class AuthService : IAuthService
                     "Invalid credentials.");
             }
 
+            // Check if account is active
+            if (!user.IsActive)
+            {
+                return Error.Unauthorized(
+                    "Auth.UserBlocked",
+                    "This account has been suspended.");
+            }
+
             // Generate JWT token
             var token = _jwtTokenGenerator.GenerateToken(user.Id, user.Email, user.Role.ToString());
 
@@ -195,5 +203,32 @@ public sealed class AuthService : IAuthService
                 "Auth.LoginFailed",
                 $"An error occurred during login: {ex.Message}");
         }
+    }
+
+    public async Task<Result> BlockUserAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+
+        if (user is null)
+            return Error.NotFound("User.NotFound", $"User '{userId}' was not found.");
+
+        if (user.Role.ToString() == "Admin")
+            return Error.Validation("Auth.CannotBlockAdmin", "Admin accounts cannot be blocked.");
+
+        user.Block();
+        await _userRepository.SaveChangesAsync(cancellationToken);
+        return Result.Success();
+    }
+
+    public async Task<Result> UnblockUserAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+
+        if (user is null)
+            return Error.NotFound("User.NotFound", $"User '{userId}' was not found.");
+
+        user.Unblock();
+        await _userRepository.SaveChangesAsync(cancellationToken);
+        return Result.Success();
     }
 }
