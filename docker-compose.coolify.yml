@@ -132,6 +132,8 @@ services:
       - Jwt__Audience=${JWT_AUDIENCE}
       - Auth0__Domain=${AUTH0_DOMAIN}
       - Auth0__Audience=${AUTH0_AUDIENCE}
+      - Kestrel__Endpoints__Https__Url=
+      - Kestrel__Endpoints__Https__Certificate__Path=
     depends_on:
       rabbitmq:
         condition: service_healthy
