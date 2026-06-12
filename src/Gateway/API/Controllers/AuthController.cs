@@ -76,6 +76,33 @@ public class AuthController : ControllerBase
         throw new NotImplementedException("This endpoint is proxied by YARP");
     }
 
+    /// <summary>
+    /// Block a user account (admin only)
+    /// </summary>
+    /// <param name="userId">User ID to block</param>
+    [HttpPut("users/{userId:guid}/block")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    public IActionResult BlockUser(Guid userId)
+    {
+        throw new NotImplementedException("This endpoint is proxied by YARP");
+    }
+
+    /// <summary>
+    /// Unblock a user account (admin only)
+    /// </summary>
+    /// <param name="userId">User ID to unblock</param>
+    [HttpPut("users/{userId:guid}/unblock")]
+    [Microsoft.AspNetCore.Authorization.Authorize(Policy = "Admin")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public IActionResult UnblockUser(Guid userId)
+    {
+        throw new NotImplementedException("This endpoint is proxied by YARP");
+    }
+
     [HttpGet("health")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public IActionResult Health() =>

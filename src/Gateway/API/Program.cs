@@ -218,14 +218,16 @@ app.UseMiddleware<GlobalExceptionHandlerMiddleware>();
 // Configure the HTTP request pipeline.
 app.UseHttpsRedirection();
 
-// Enable Swagger
-app.UseSwagger();
-app.UseSwaggerUI(options =>
+if (app.Environment.IsDevelopment())
 {
-    options.SwaggerEndpoint("/swagger/v1/swagger.json", "PixPro API Gateway v1");
-    options.RoutePrefix = "swagger";
-    options.DocumentTitle = "PixPro API Gateway";
-});
+    app.UseSwagger();
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "PixPro API Gateway v1");
+        options.RoutePrefix = "swagger";
+        options.DocumentTitle = "PixPro API Gateway";
+    });
+}
 
 // Enable CORS
 app.UseCors("GatewayPolicy");
