@@ -68,6 +68,7 @@ public class WebSocketController : ControllerBase
     }
 
     [HttpGet("status")]
+    [Authorize]
     public IActionResult GetStatus()
     {
         return Ok(new
@@ -79,6 +80,7 @@ public class WebSocketController : ControllerBase
     }
 
     [HttpGet("banned")]
+    [Authorize(Policy = "Admin")]
     public IActionResult GetBannedIps()
     {
         var banned = _connectionManager.GetBannedIps();
@@ -90,6 +92,7 @@ public class WebSocketController : ControllerBase
     }
 
     [HttpDelete("banned/{ipAddress}")]
+    [Authorize(Policy = "Admin")]
     public IActionResult UnbanIp(string ipAddress)
     {
         var unbanned = _connectionManager.UnbanIp(ipAddress);
