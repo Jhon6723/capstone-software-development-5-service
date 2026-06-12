@@ -100,9 +100,36 @@ Authorization: Bearer <admin-token>
 
 ---
 
-### `PATCH /api/auth/users/{id}/status` 🔒 Admin
+### `PUT /api/auth/users/{userId}/block` 🔒 Admin
 
-Block or unblock a user. See `docs/admin-and-payments-architecture.md`.
+Block a user account. Blocked users cannot log in.
+
+```
+PUT /api/auth/users/3fa85f64-5717-4562-b3fc-2c963f66afa6/block
+Authorization: Bearer <admin-token>
+```
+
+| Status | Body |
+|--------|------|
+| `204 No Content` | — |
+| `400 Bad Request` | `ErrorResponse` (`Auth.CannotBlockAdmin` — admin accounts cannot be blocked) |
+| `404 Not Found` | `ErrorResponse` |
+
+---
+
+### `PUT /api/auth/users/{userId}/unblock` 🔒 Admin
+
+Restore access for a previously blocked user.
+
+```
+PUT /api/auth/users/3fa85f64-5717-4562-b3fc-2c963f66afa6/unblock
+Authorization: Bearer <admin-token>
+```
+
+| Status | Body |
+|--------|------|
+| `204 No Content` | — |
+| `404 Not Found` | `ErrorResponse` |
 
 ---
 
@@ -491,9 +518,9 @@ ws://localhost:8080/api/websocket/connect?access_token=<jwt>
 
 ---
 
-### `GET /api/websocket/status`
+### `GET /api/websocket/status` 🔒
 
-Public. Returns service health and active connection count.
+Requires a valid JWT. Returns service health and active connection count.
 
 ```json
 {
@@ -505,7 +532,7 @@ Public. Returns service health and active connection count.
 
 ---
 
-### `GET /api/websocket/banned`
+### `GET /api/websocket/banned` 🔒 Admin
 
 Returns the list of currently banned IP addresses.
 
@@ -518,12 +545,13 @@ Returns the list of currently banned IP addresses.
 
 ---
 
-### `DELETE /api/websocket/banned/{ipAddress}`
+### `DELETE /api/websocket/banned/{ipAddress}` 🔒 Admin
 
 Manually unban an IP address.
 
 ```
 DELETE /api/websocket/banned/192.168.1.50
+Authorization: Bearer <admin-token>
 ```
 
 | Status | Body |

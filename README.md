@@ -434,19 +434,20 @@ All admin endpoints require `[Authorize(Policy = "Admin")]`.
 | Capability | Method | Endpoint | Service |
 |------------|--------|----------|---------|
 | List all users | `GET` | `/api/auth/users?page=1&pageSize=20` | Auth |
-| Block / unblock user | `PATCH` | `/api/auth/users/{id}/status` | Auth |
+| Block user | `PUT` | `/api/auth/users/{id}/block` | Auth |
+| Unblock user | `PUT` | `/api/auth/users/{id}/unblock` | Auth |
 | View user credit balance | `GET` | `/api/projects/admin/users/{id}/credits` | Projects |
 | Manually assign subscription | `PATCH` | `/api/projects/admin/users/{id}/subscription` | Projects |
 | View user payment history | `GET` | `/api/payments/admin/users/{id}/history` | Payment |
 | Global revenue summary | `GET` | `/api/payments/admin/summary` | Payment |
 
 **Block/unblock user:**
-```json
-PATCH /api/auth/users/{id}/status
-{ "isActive": false }
+```
+PUT /api/auth/users/{id}/block     → 204 No Content
+PUT /api/auth/users/{id}/unblock   → 204 No Content
 ```
 
-A blocked user cannot log in. Any existing valid JWT is also rejected (DB check on every request).
+No request body required. Admin accounts cannot be blocked (`Auth.CannotBlockAdmin`). A blocked user cannot log in (`Auth.UserBlocked`).
 
 ---
 
@@ -477,7 +478,7 @@ sleep 3 && screen -r tunnel
 screen -X -S tunnel quit
 ```
 
-Swagger is available at `https://xxxx.trycloudflare.com/swagger/index.html`.
+Swagger is available at `https://xxxx.trycloudflare.com/swagger/index.html` (only when `ASPNETCORE_ENVIRONMENT=Development`).
 
 > The public URL changes on every restart.
 

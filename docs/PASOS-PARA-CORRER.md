@@ -427,6 +427,7 @@ docker-compose logs db
 
 ### Docker:
 - Gateway: `http://localhost:8080` ✅ ÚNICO PUNTO DE ENTRADA
+- Swagger: `http://localhost:8080/swagger` (solo disponible con `ASPNETCORE_ENVIRONMENT=Development`)
 - Auth, Projects, Notifications: NO accesibles desde fuera
 
 ### Bases de Datos (Local y Docker):
