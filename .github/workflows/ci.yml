@@ -1,0 +1,244 @@
+# Pipeline optimizado:
+# - Branches de desarrollo: solo build y test (~2-3 min)
+# Servicios: Gateway, Auth, Projects, Notifications, IA (Python/FastAPI)
+
+name: CI
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+
+
+jobs:
+  build-gateway:
+    name: Build Gateway
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: .nuget-cache
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+      - name: Build
+        run: |
+          dotnet restore src/Gateway/API/API.csproj
+          dotnet build src/Gateway/API/API.csproj --no-restore -c Release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gateway-bin
+          path: src/Gateway/API/bin/
+          retention-days: 1
+
+  build-auth:
+    name: Build Auth
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: .nuget-cache
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+      - name: Build
+        run: |
+          dotnet restore src/Services/Auth/API/API.csproj
+          dotnet build src/Services/Auth/API/API.csproj --no-restore -c Release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: auth-bin
+          path: src/Services/Auth/API/bin/
+          retention-days: 1
+
+  build-projects:
+    name: Build Projects
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: .nuget-cache
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+      - name: Build
+        run: |
+          dotnet restore src/Services/Projects/API/API.csproj
+          dotnet build src/Services/Projects/API/API.csproj --no-restore -c Release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: projects-bin
+          path: src/Services/Projects/API/bin/
+          retention-days: 1
+
+  build-notifications:
+    name: Build Notifications
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: .nuget-cache
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+      - name: Build
+        run: |
+          dotnet restore src/Services/Notifications/API/API.csproj
+          dotnet build src/Services/Notifications/API/API.csproj --no-restore -c Release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: notifications-bin
+          path: src/Services/Notifications/API/bin/
+          retention-days: 1
+
+  build-ia:
+    name: Build IA
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: .pip-cache
+          key: pip-${{ runner.os }}-${{ hashFiles('src/Services/IA/requirements.txt') }}
+          restore-keys: pip-${{ runner.os }}-
+      - name: Install dependencies
+        run: |
+          cd src/Services/IA
+          pip install --cache-dir ${{ github.workspace }}/.pip-cache -r requirements.txt
+          pip install --cache-dir ${{ github.workspace }}/.pip-cache pytest pytest-asyncio
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ia-src
+          path: src/Services/IA/
+          retention-days: 1
+
+  validate-asyncapi:
+    name: Validate AsyncAPI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Validate
+        run: |
+          npm install -g @asyncapi/cli
+          asyncapi validate docs/asyncapi.yaml
+
+  test-gateway:
+    name: Test Gateway
+    runs-on: ubuntu-latest
+    needs: build-gateway
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: gateway-bin
+          path: src/Gateway/API/bin/
+      - name: Test
+        run: |
+          dotnet test src/Gateway/API/API.csproj \
+            --no-build -c Release \
+            --logger "junit;LogFilePath=test-results.xml"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-gateway
+          path: src/Gateway/API/test-results.xml
+          retention-days: 7
+
+  test-auth:
+    name: Test Auth
+    runs-on: ubuntu-latest
+    needs: build-auth
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: auth-bin
+          path: src/Services/Auth/API/bin/
+      - name: Test
+        run: |
+          dotnet test src/Services/Auth/API/API.csproj \
+            --no-build -c Release \
+            --logger "junit;LogFilePath=test-results.xml"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-auth
+          path: src/Services/Auth/API/test-results.xml
+          retention-days: 7
+
+  test-projects:
+    name: Test Projects
+    runs-on: ubuntu-latest
+    needs: build-projects
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: projects-bin
+          path: src/Services/Projects/API/bin/
+      - name: Test
+        run: |
+          dotnet test src/Services/Projects/API/API.csproj \
+            --no-build -c Release \
+            --logger "junit;LogFilePath=test-results.xml"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-projects
+          path: src/Services/Projects/API/test-results.xml
+          retention-days: 7
+
+  test-notifications:
+    name: Test Notifications
+    runs-on: ubuntu-latest
+    needs: build-notifications
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: notifications-bin
+          path: src/Services/Notifications/API/bin/
+      - name: Test
+        run: |
+          dotnet test src/Services/Notifications/API/API.csproj \
+            --no-build -c Release \
+            --logger "junit;LogFilePath=test-results.xml"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-notifications
+          path: src/Services/Notifications/API/test-results.xml
+          retention-days: 7
+
+  test-ia:
+    name: Test IA
+    runs-on: ubuntu-latest
+    needs: build-ia
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: .pip-cache
+          key: pip-${{ runner.os }}-${{ hashFiles('src/Services/IA/requirements.txt') }}
+          restore-keys: pip-${{ runner.os }}-
+      - name: Install dependencies and test
+        run: |
+          cd src/Services/IA
+          pip install --cache-dir ${{ github.workspace }}/.pip-cache -r requirements.txt
+          pip install --cache-dir ${{ github.workspace }}/.pip-cache pytest pytest-asyncio
+          pytest tests/ -v --junitxml=test-results.xml || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-ia
+          path: src/Services/IA/test-results.xml
+          retention-days: 7

@@ -219,6 +219,170 @@ docker-compose down
 # Detener y eliminar volúmenes (borra las bases de datos)
 docker-compose down -v
 ```
+---
+
+## ☁️ OPCIÓN 3: Despliegue en Servidor (Coolify + Hetzner)
+
+### Requisitos
+
+1. Servidor VPS (Hetzner CX23 recomendado: 2 vCPU, 4GB RAM, ~$6.5/mes)
+2. Dominio propio (ej: `pixpro.lat`)
+3. Cuenta de GitHub con el repositorio del proyecto
+
+### Paso 1: Configurar el servidor Hetzner
+
+1. Crear un servidor en [Hetzner Cloud](https://console.hetzner.cloud/)
+   - Imagen: **Ubuntu 22.04+**
+   - Tipo: **CX23** (2 vCPU, 4GB RAM)
+   - Ubicación: la más cercana a tus usuarios
+2. Acceder por SSH:
+```bash
+ssh root@<IP_DEL_SERVIDOR>
+```
+3. Configurar firewall:
+```bash
+ufw allow 22/tcp    # SSH
+ufw allow 80/tcp    # HTTP
+ufw allow 443/tcp   # HTTPS
+ufw enable
+```
+
+### Paso 2: Instalar Coolify
+
+```bash
+curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash
+```
+
+Espera a que termine la instalación. Luego accede al dashboard:
+```
+http://<IP_DEL_SERVIDOR>:18473
+```
+
+Crea tu cuenta de administrador en el primer acceso.
+
+### Paso 3: Conectar repositorio de GitHub
+
+1. En Coolify → **Sources** → **Add GitHub App**
+2. Sigue las instrucciones para crear una GitHub App y conectar tu repositorio privado
+3. Da permisos al repositorio `capstone-software-development-5-service`
+
+### Paso 4: Crear el recurso en Coolify
+
+1. **Projects** → Crear proyecto → Crear entorno (ej: `production`)
+2. **Add Resource** → **Docker Compose**
+3. Selecciona el repositorio y branch `develop`
+4. En **Docker Compose Location**: `docker-compose.coolify.yml`
+5. Clic en **Save**
+
+### Paso 5: Configurar variables de entorno
+
+En Coolify → tu recurso → **Environment Variables**, agrega todas las variables del archivo `.env`:
+
+```
+JWT_SECRET=<tu_secret_de_32+_caracteres>
+JWT_ISSUER=PixProAuth
+JWT_AUDIENCE=PixProAPI
+AUTH0_DOMAIN=<tu_dominio_auth0>
+AUTH0_AUDIENCE=<tu_audience_auth0>
+POSTGRES_PASSWORD=<password>
+MONGO_INITDB_ROOT_USERNAME=<usuario>
+MONGO_INITDB_ROOT_PASSWORD=<password>
+RABBITMQ_DEFAULT_USER=<usuario>
+RABBITMQ_DEFAULT_PASS=<password>
+OPENAI_API_KEY=<tu_api_key>
+```
+
+### Paso 6: Configurar dominio y SSL
+
+1. En tu proveedor de dominios (ej: Namecheap), crear un **A Record**:
+   - Host: `api`
+   - Value: `<IP_DEL_SERVIDOR>`
+   - TTL: Automatic
+2. En Coolify → tu recurso → **Configuration** → **Domains for gateway**:
+   ```
+   https://api.tu-dominio.com
+   ```
+3. Clic en **Save**
+
+Coolify emitirá automáticamente un certificado SSL de Let's Encrypt.
+
+### Paso 7: Configurar red de Coolify
+
+En Coolify → tu recurso → **Configuration** → **Advanced**:
+- Activar **"Connect To Predefined Network"** ✅
+
+Esto permite que Traefik (el proxy de Coolify) alcance los contenedores de tu aplicación.
+
+### Paso 8: Desplegar
+
+1. Clic en **Redeploy** en Coolify
+2. Espera a que todos los servicios se construyan y arranquen (~5-10 min la primera vez)
+3. Verifica el estado en la pestaña **Deployments** o **Logs**
+
+### Paso 9: Verificar el despliegue
+
+```bash
+# Health check
+curl https://api.tu-dominio.com/health
+# Debe retornar: Healthy
+
+# Verificar certificado SSL
+curl -vI https://api.tu-dominio.com/health 2>&1 | grep issuer
+# Debe decir: issuer: ... Let's Encrypt
+
+# WebSocket
+# Conectar a: wss://api.tu-dominio.com/api/websocket/connect
+```
+
+### Gestión del servidor
+
+**Ver estado de los contenedores:**
+```bash
+ssh root@<IP_DEL_SERVIDOR>
+docker ps
+```
+
+**Ver consumo de recursos:**
+```bash
+docker stats --no-stream
+free -h
+```
+
+**Apagar el servidor (desde SSH):**
+```bash
+# IMPORTANTE: NO usar docker stop, solo poweroff directamente
+# Si usas docker stop, los contenedores no arrancan automáticamente al reiniciar
+sudo poweroff
+```
+
+**Encender el servidor:**
+1. Hetzner Cloud → tu servidor → **Actions** → **Power on**
+2. Los contenedores se reinician automáticamente (~1-2 min)
+
+**Si Coolify no arranca tras reiniciar:**
+```bash
+ssh root@<IP_DEL_SERVIDOR>
+bash /data/coolify/source/upgrade.sh
+```
+
+**Reiniciar solo la aplicación (sin rebuild):**
+- Coolify UI → tu recurso → **Restart**
+
+**Redesplegar con cambios nuevos:**
+- Push a `develop` → Coolify UI → **Redeploy**
+
+### Puertos en Coolify
+
+- Gateway: `https://api.tu-dominio.com` (Traefik maneja SSL y routing)
+- Auth, Projects, Notifications, IA: **solo accesibles internamente** entre contenedores
+- Coolify Dashboard: `http://<IP_DEL_SERVIDOR>:18473`
+
+### Notas importantes
+
+- Hetzner **cobra igual** con el servidor apagado. Solo se deja de cobrar al **eliminar** el servidor
+- El archivo de despliegue es `docker-compose.coolify.yml` (sin puertos de bases de datos expuestos)
+- Las migraciones de base de datos se aplican automáticamente al iniciar los servicios
+- Los certificados SSL se renuevan automáticamente vía Let's Encrypt
 
 ---
 
@@ -265,11 +429,17 @@ docker-compose logs db
 - Gateway: `http://localhost:8080` ✅ ÚNICO PUNTO DE ENTRADA
 - Auth, Projects, Notifications: NO accesibles desde fuera
 
-### Bases de Datos (ambos casos):
+### Bases de Datos (Local y Docker):
 - PostgreSQL (Auth): `localhost:5432`
 - PostgreSQL (Projects): `localhost:5433`
 - MongoDB (Notifications): `localhost:27017`
 - RabbitMQ Management: `http://localhost:15672`
+
+### Coolify (Servidor):
+- Gateway: `https://api.tu-dominio.com` (único punto de entrada público)
+- Auth, Projects, Notifications, IA: **solo accesibles internamente**
+- Bases de datos: **sin puertos expuestos** (solo accesibles entre contenedores)
+- Coolify Dashboard: `http://<IP_DEL_SERVIDOR>:18473`
 
 ---
 
@@ -295,3 +465,15 @@ docker-compose logs db
 - [ ] Puedo registrar usuario
 - [ ] Puedo hacer login y obtener token
 - [ ] Puedo acceder a endpoints protegidos con token
+
+**Coolify (Servidor):**
+- [ ] Servidor Hetzner creado y accesible por SSH
+- [ ] Coolify instalado y dashboard accesible
+- [ ] Repositorio de GitHub conectado
+- [ ] Variables de entorno configuradas en Coolify
+- [ ] Dominio configurado con A Record apuntando al servidor
+- [ ] "Connect To Predefined Network" activado
+- [ ] Despliegue exitoso (todos los servicios `Running`)
+- [ ] Health check funciona: `GET https://api.tu-dominio.com/health`
+- [ ] Certificado SSL válido (Let's Encrypt)
+- [ ] WebSocket funciona: `wss://api.tu-dominio.com/api/websocket/connect`
