@@ -28,9 +28,6 @@ FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
 
-# Copy TLS certificate into the image
-COPY src/Services/Notifications/API/certs/ /app/certs/
-
-ENV ASPNETCORE_URLS=http://+:8083;https://+:8443
+ENV ASPNETCORE_URLS=http://+:8083
 
 ENTRYPOINT ["dotnet", "API.dll"]

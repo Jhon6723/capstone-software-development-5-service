@@ -5,8 +5,6 @@ using Microsoft.OpenApi.Models;
 using PixPro.Services.Notifications.Application;
 using PixPro.Services.Notifications.Infrastructure;
 using PixPro.Services.Notifications.Infrastructure.Persistence;
-using Microsoft.AspNetCore.SignalR;
-using StackExchange.Redis;
 
 // Load .env file if it exists (for local development without Docker)
 var envPath = Path.Combine(Directory.GetCurrentDirectory(), "../../../../.env");
@@ -18,16 +16,6 @@ if (File.Exists(envPath))
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
-builder.Services.AddSignalR()
-    .AddStackExchangeRedis(options =>
-    {
-        options.Configuration = new StackExchange.Redis.ConfigurationOptions
-        {
-            EndPoints = { builder.Configuration["ConnectionStrings:Redis"] ?? "redis:6379" },
-            Password = builder.Configuration["Redis:Password"],
-            AbortOnConnectFail = false,
-        };
-    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHealthChecks();
 
@@ -225,7 +213,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-app.MapHub<PixPro.Services.Notifications.API.Hubs.NotificationHub>("/hubs/notifications");
 app.MapHealthChecks("/health");
 
 app.Run();
