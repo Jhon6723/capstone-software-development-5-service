@@ -9,7 +9,7 @@ services:
     networks:
       - pixpro_net
     environment:
-      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8080
       - Jwt__Secret=${JWT_SECRET}
       - Jwt__Issuer=${JWT_ISSUER}
@@ -29,7 +29,7 @@ services:
     networks:
       - pixpro_net
     environment:
-      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8081
       - AUTH_DB_CONNECTION=Host=db;Port=5432;Database=pixpro_auth;Username=postgres;Password=${DB_PASSWORD}
       - Jwt__Secret=${JWT_SECRET}
@@ -48,7 +48,7 @@ services:
     networks:
       - pixpro_net
     environment:
-      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:8082
       - ConnectionStrings__ProjectsDb=Host=projects-db;Port=5432;Database=pixpro_projects;Username=postgres;Password=${PROJECTS_DB_PASSWORD}
       - Jwt__Secret=${JWT_SECRET}
@@ -114,14 +114,11 @@ services:
       dockerfile: src/Services/Notifications/API/Dockerfile # Uncomment if you want to build locally instead of using the registry image
     expose:
       - "8083"
-      - "8443"
-    ports:
-      - "8443:8443"
     networks:
       - pixpro_net
     environment:
-      - ASPNETCORE_ENVIRONMENT=Production
-      - ASPNETCORE_URLS=http://+:8083;https://+:8443
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8083
       - ConnectionStrings__NotificationsDb=mongodb://${NOTIFICATIONS_DB_USER}:${NOTIFICATIONS_DB_PASSWORD}@notifications-db:27017/pixpro_notifications?authSource=admin
       - ConnectionStrings__Redis=redis:6379
       - Redis__Password=${REDIS_PASSWORD}
@@ -133,7 +130,6 @@ services:
       - Jwt__Audience=${JWT_AUDIENCE}
       - Auth0__Domain=${AUTH0_DOMAIN}
       - Auth0__Audience=${AUTH0_AUDIENCE}
-      - Kestrel__Endpoints__Https__Certificate__Password=${KESTREL_CERT_PASSWORD}
     depends_on:
       - rabbitmq
       - notifications-db
