@@ -285,11 +285,20 @@ JWT_AUDIENCE=PixProAPI
 AUTH0_DOMAIN=<tu_dominio_auth0>
 AUTH0_AUDIENCE=<tu_audience_auth0>
 POSTGRES_PASSWORD=<password>
+PROJECTS_DB_PASSWORD=<password>
+IA_DB_PASSWORD=<password>
 MONGO_INITDB_ROOT_USERNAME=<usuario>
 MONGO_INITDB_ROOT_PASSWORD=<password>
+NOTIFICATIONS_DB_USER=<usuario>
+NOTIFICATIONS_DB_PASSWORD=<password>
 RABBITMQ_DEFAULT_USER=<usuario>
 RABBITMQ_DEFAULT_PASS=<password>
+REDIS_PASSWORD=<password>
+CORS_ALLOWED_ORIGIN_0=https://tu-frontend.vercel.app
 OPENAI_API_KEY=<tu_api_key>
+CLOUDINARY_CLOUD_NAME=<tu_cloud_name>
+CLOUDINARY_API_KEY=<tu_api_key>
+CLOUDINARY_API_SECRET=<tu_api_secret>
 ```
 
 ### Paso 6: Configurar dominio y SSL

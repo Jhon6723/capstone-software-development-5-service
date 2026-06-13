@@ -46,6 +46,7 @@ Content-Type: application/json
 | `201 Created` | `UserResponse` |
 | `400 Bad Request` | `ErrorResponse` (validation) |
 | `409 Conflict` | `ErrorResponse` (email already exists) |
+| `429 Too Many Requests` | `ErrorResponse` (rate limit: 10 req/min per IP) |
 
 ---
 
@@ -65,6 +66,7 @@ Content-Type: application/json
 |--------|------|
 | `200 OK` | `LoginResponse` |
 | `401 Unauthorized` | `ErrorResponse` (`Auth.InvalidCredentials` or `Auth.UserBlocked`) |
+| `429 Too Many Requests` | `ErrorResponse` (rate limit: 10 req/min per IP) |
 
 ---
 
@@ -102,7 +104,7 @@ Authorization: Bearer <admin-token>
 
 ### `PUT /api/auth/users/{userId}/block` 🔒 Admin
 
-Block a user account. Blocked users cannot log in.
+Block a user account. Blocked users cannot log in, and any existing valid JWT is immediately revoked via Redis blacklist (TTL = JWT expiry).
 
 ```
 PUT /api/auth/users/3fa85f64-5717-4562-b3fc-2c963f66afa6/block
@@ -296,6 +298,7 @@ parameters={"model":"kontext","strength":0.75}
 | `400 Bad Request` | `{ "error": "..." }` (validation) |
 | `401 Unauthorized` | `{ "error": "Invalid token: user ID not found." }` |
 | `402 Payment Required` | `{ "error": "INSUFFICIENT_CREDITS" }` |
+| `429 Too Many Requests` | `{ "error": "FLUX_DAILY_LIMIT_EXCEEDED" }` (flux-schnell daily cap reached) |
 
 > The image is processed asynchronously. The result arrives via WebSocket (`IMAGE_PROCESSING_COMPLETED`).
 
@@ -359,7 +362,7 @@ Authorization: Bearer <token>
 }
 ```
 
-> Credits are seeded lazily on first use per model tier. If a tier is not listed, it hasn't been used yet. `flux-schnell` (Pixazo/Generator) is always free — no credit row is created.
+> Credits are seeded lazily on first use per model tier. If a tier is not listed, it hasn't been used yet. `flux-schnell` (Pixazo/Generator) is free but capped at **200 requests per rolling 24-hour window** — tracked via `UserCredit.Pixazo` row.
 
 ---
 
@@ -707,7 +710,7 @@ Error types: `Validation` → `400`, `NotFound` → `404`, `Conflict` → `409`,
 | `403 Forbidden` | Authenticated but not authorized (e.g. deleting another user's image) |
 | `404 Not Found` | Resource does not exist |
 | `409 Conflict` | Duplicate resource (e.g. email already registered) |
-| `429 Too Many Requests` | WebSocket connection limit exceeded |
+| `429 Too Many Requests` | Rate limit exceeded (auth: 10 req/min per IP; WebSocket connection limit) |
 | `500 Internal Server Error` | Unexpected server error |
 
 ---

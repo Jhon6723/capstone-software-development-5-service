@@ -65,7 +65,7 @@ Frontend (Angular) ──HTTP/WSS──► API Gateway (YARP)
 | IA service | Python, FastAPI |
 | Gateway | YARP (Yet Another Reverse Proxy) |
 | Message broker | RabbitMQ |
-| Databases | PostgreSQL (Auth, Projects, IA, Payment), MongoDB (Notifications), Redis (Notifications cache) |
+| Databases | PostgreSQL (Auth, Projects, IA, Payment), MongoDB (Notifications), Redis (Auth blacklist + Notifications cache) |
 | Image storage | Cloudinary |
 | AI providers | Pixazo.ai (Flux Schnell), OpenAI (GPT Image 1 Mini), Pollinations.ai (FLUX.1 Kontext) |
 | Payments | Stripe / MercadoPago |
@@ -302,7 +302,7 @@ Credit enforcement lives in the **Projects Service**, before any message is publ
 | `nanobanana-medium` (NanaBanana V2) | 2 | Mid NanaBanana — Gemini 3.1 Flash, ~$0.040/image |
 | `nanobanana-max` (NanaBanana Pro) | 1 | Max NanaBanana — Gemini 3 Pro, ~$0.090/image |
 | `gpt-image-1.5-medium` | 1 | OpenAI flagship medium — ~$0.034/image |
-| `flux-schnell` (Budget) | **Unlimited** | Text-to-image — Pixazo.ai, ~$0.0012/image |
+| `flux-schnell` (Budget) | **200/day** | Text-to-image — Pixazo.ai, ~$0.0012/image (rolling 24h window) |
 
 ### AI Models
 
@@ -329,7 +329,7 @@ Models not yet integrated but tracked for future adoption:
 ### Credit Logic
 
 - **Admins** bypass all credit checks entirely.
-- **`flux-schnell`** is always unlimited.
+- **`flux-schnell`** is free with a **200 requests/day rolling limit** per user.
 - If a user has `0` credits remaining, the request returns `402 INSUFFICIENT_CREDITS`.
 - If the IA Service returns `ImageProcessingFailedEvent`, the credit is **refunded** — unless the error is `CONTENT_MODERATION_VIOLATION`.
 
@@ -447,7 +447,7 @@ PUT /api/auth/users/{id}/block     → 204 No Content
 PUT /api/auth/users/{id}/unblock   → 204 No Content
 ```
 
-No request body required. Admin accounts cannot be blocked (`Auth.CannotBlockAdmin`). A blocked user cannot log in (`Auth.UserBlocked`).
+No request body required. Admin accounts cannot be blocked (`Auth.CannotBlockAdmin`). A blocked user cannot log in (`Auth.UserBlocked`), and any existing valid JWT is immediately revoked via Redis blacklist.
 
 ---
 

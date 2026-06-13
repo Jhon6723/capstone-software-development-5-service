@@ -345,10 +345,10 @@ public IActionResult UnbanIp(string ipAddress) { ... }
 | 3 | ✅ N/A | `IA/app/nanobanana_processor.py` — usa polling, no callback | No aplica hoy |
 | 4 | 🔴 High | `Gateway/API/Program.cs:221` + `docker-compose.yml` | ✅ Done |
 | 12 | 🔴 High | `Notifications/WebSocketController.cs:70-101` | ✅ Done |
-| 5 | 🟠 Medium | `JwtTokenGenerator.cs:27` + `appsettings` | ⬜ Not done |
-| 6 | 🟠 Medium | `Gateway/API/Program.cs` | ⬜ Not done |
-| 7 | 🟠 Medium | `Projects Service` credit logic | ⬜ Not done |
-| 8 | 🟠 Medium | `Gateway/API/Program.cs:184` | ⬜ Not done |
+| 5 | 🟠 Medium | `JwtTokenGenerator.cs:27` + `appsettings` | ✅ Done |
+| 6 | 🟠 Medium | `Auth/API/Controllers/AuthController.cs` | ✅ Done |
+| 7 | 🟠 Medium | `Projects Service` credit logic | ✅ Done |
+| 8 | 🟠 Medium | `Gateway/API/Program.cs:184` | ✅ Done |
 | 9 | 🟡 Low | Logging pipeline config | ⬜ Not done |
 | 10 | 🟡 Low | `IA/app/main.py:15` | ⬜ Not done |
 | 11 | 🟡 Low | DB access config + audit log | ⬜ Not done |

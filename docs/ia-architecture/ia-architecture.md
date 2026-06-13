@@ -297,7 +297,7 @@ Credit enforcement lives in the **Projects Service** — it acts as the gate *be
 | `nanobanana-medium` (NanaBanana V2) | **2** | 1 | Mid NanaBanana — Gemini 3.1 Flash (~$0.040) |
 | `nanobanana-max` (NanaBanana Pro) | **1** | 1 | Max NanaBanana — Gemini 3 Pro (~$0.090) |
 | `gpt-image-1.5-medium` | **1** | 1 | OpenAI flagship medium quality (~$0.034) |
-| `flux-schnell` (Pixazo) | **Unlimited** | — | Text-to-image, cheapest tier, no credit gate |
+| `flux-schnell` (Pixazo) | **200/day** | — | Text-to-image, cheapest tier, rolling 24h window |
 
 ### **Subscription Tiers (Future)**
 
