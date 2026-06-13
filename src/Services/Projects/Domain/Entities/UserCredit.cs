@@ -12,6 +12,8 @@ public sealed class UserCredit
     public SubscriptionTier SubscriptionTier { get; private set; }
     public DateTimeOffset? ResetAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
+    public int FluxDailyCount { get; private set; }
+    public DateTimeOffset? FluxDailyResetAt { get; private set; }
 
     public UserCredit(
         Guid userId,
@@ -52,10 +54,30 @@ public sealed class UserCredit
         return true;
     }
 
-    public void Refund()
+    public void Refund(int amount = 1)
     {
-        CreditsRemaining++;
+        if (amount <= 0)
+            throw new ArgumentException("Refund amount must be positive.", nameof(amount));
+
+        CreditsRemaining += amount;
         UpdatedAt = DateTimeOffset.UtcNow;
+    }
+    public bool TryIncrementFluxDaily(int dailyLimit)
+    {
+        var now = DateTimeOffset.UtcNow;
+
+        if (FluxDailyResetAt is null || now >= FluxDailyResetAt)
+        {
+            FluxDailyCount = 0;
+            FluxDailyResetAt = now.AddHours(24);
+        }
+
+        if (FluxDailyCount >= dailyLimit)
+            return false;
+
+        FluxDailyCount++;
+        UpdatedAt = now;
+        return true;
     }
 
     public void UpdateSubscription(

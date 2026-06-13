@@ -144,6 +144,16 @@ namespace PixPro.Services.Projects.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("credits_total");
 
+                    b.Property<int>("FluxDailyCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(0)
+                        .HasColumnName("flux_daily_count");
+
+                    b.Property<DateTimeOffset?>("FluxDailyResetAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("flux_daily_reset_at");
+
                     b.Property<string>("ModelTier")
                         .IsRequired()
                         .HasColumnType("text")

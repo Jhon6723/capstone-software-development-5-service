@@ -50,6 +50,17 @@ public sealed class UserCreditConfiguration : IEntityTypeConfiguration<UserCredi
             .HasColumnType("timestamptz")
             .IsRequired();
 
+        builder.Property(uc => uc.FluxDailyCount)
+            .HasColumnName("flux_daily_count")
+            .HasColumnType("int")
+            .IsRequired()
+            .HasDefaultValue(0);
+
+        builder.Property(uc => uc.FluxDailyResetAt)
+            .HasColumnName("flux_daily_reset_at")
+            .HasColumnType("timestamptz")
+            .IsRequired(false);
+
         builder.HasIndex(uc => new { uc.UserId, uc.ModelTier })
             .IsUnique();
 

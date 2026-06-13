@@ -61,15 +61,25 @@ public class ImageService : IImageService
     {
         try
         {
-            // Credit check for non-admin users on img2img models
-            if (!request.IsAdmin && request.Parameters is not null
-                && ModelTierMap.TryGetValue(request.Parameters.Model, out var modelTier))
+            // Credit check for non-admin users
+            if (!request.IsAdmin && request.Parameters is not null)
             {
-                var deductResult = await _creditService.TryDeductCreditAsync(
-                    request.OwnerId, modelTier, cancellationToken);
+                if (ModelTierMap.TryGetValue(request.Parameters.Model, out var modelTier))
+                {
+                    var deductResult = await _creditService.TryDeductCreditAsync(
+                        request.OwnerId, modelTier, cancellationToken);
 
-                if (!deductResult.IsSuccess)
-                    return Result<ImageUploadResponse>.Failure(deductResult.Error);
+                    if (!deductResult.IsSuccess)
+                        return Result<ImageUploadResponse>.Failure(deductResult.Error);
+                }
+                else
+                {
+                    var fluxResult = await _creditService.TryIncrementFluxDailyAsync(
+                        request.OwnerId, cancellationToken);
+
+                    if (!fluxResult.IsSuccess)
+                        return Result<ImageUploadResponse>.Failure(fluxResult.Error);
+                }
             }
             var file = request.File;
             string? imageUrl = null;

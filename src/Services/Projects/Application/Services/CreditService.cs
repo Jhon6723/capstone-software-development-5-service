@@ -22,10 +22,62 @@ public sealed class CreditService : ICreditService
         { ModelTier.Gpt15Medium,    1 },
     };
 
+    private const int FluxDailyDefaultLimit = 200;
+
     public CreditService(IUserCreditRepository creditRepository, ILogger<CreditService> logger)
     {
         _creditRepository = creditRepository;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Tracks daily usage of <c>flux-schnell</c> (free model) for a user and enforces
+    /// the <see cref="FluxDailyDefaultLimit"/> cap. Unlike paid models, flux-schnell
+    /// does not consume credits — this is a sliding 24-hour rate limit to prevent
+    /// cost abuse on the underlying Pixazo API.
+    /// </summary>
+    /// <remarks>
+    /// A <c>UserCredit</c> row with <c>ModelTier.Pixazo</c> is created on first use
+    /// and reused as the counter anchor. The counter resets automatically after 24 hours.
+    /// Admins bypass this check entirely (handled in <c>ImageService</c>).
+    /// </remarks>
+    /// <returns>
+    /// <c>Success(true)</c> if the request is within the daily limit;
+    /// <c>Failure("FLUX_DAILY_LIMIT_EXCEEDED")</c> if the cap has been reached.
+    /// </returns>
+    public async Task<Result<bool>> TryIncrementFluxDailyAsync(
+        Guid userId,
+        CancellationToken cancellationToken = default)
+    {
+        var credit = await _creditRepository.GetByUserAndModelAsync(userId, ModelTier.Pixazo, cancellationToken);
+
+        if (credit is null)
+        {
+            credit = new UserCredit(
+                userId,
+                ModelTier.Pixazo,
+                creditsRemaining: 0,
+                creditsTotal: 0,
+                subscriptionTier: SubscriptionTier.Free);
+
+            await _creditRepository.AddAsync(credit, cancellationToken);
+        }
+
+        if (!credit.TryIncrementFluxDaily(FluxDailyDefaultLimit))
+        {
+            _logger.LogWarning(
+                "flux-schnell daily limit reached for UserId: {UserId}. Limit: {Limit}",
+                userId, FluxDailyDefaultLimit);
+            return Result<bool>.Failure("FLUX_DAILY_LIMIT_EXCEEDED");
+        }
+
+        await _creditRepository.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "flux-schnell usage incremented for UserId: {UserId}. Count: {Count}",
+            userId, credit.FluxDailyCount);
+
+        return Result<bool>.Success(true);
     }
 
     public async Task<Result<bool>> TryDeductCreditAsync(
