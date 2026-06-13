@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using PixPro.Services.Auth.Application.DTOs.Responses;
 using PixPro.Services.Auth.Application.Common.Results;
 using PixPro.Services.Auth.Application.DTOs.Requests;
@@ -29,6 +30,7 @@ public class AuthController : ControllerBase
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Created user information</returns>
     [HttpPost("register")]
+    [EnableRateLimiting("AuthPolicy")]
     [ProducesResponseType(typeof(UserResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
@@ -56,6 +58,7 @@ public class AuthController : ControllerBase
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>JWT token and user information</returns>
     [HttpPost("login")]
+    [EnableRateLimiting("AuthPolicy")]
     [ProducesResponseType(typeof(LoginResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
