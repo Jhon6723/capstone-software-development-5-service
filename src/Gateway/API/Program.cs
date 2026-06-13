@@ -1,6 +1,7 @@
 // Load .env file if it exists (for local development without Docker)
 using API.Middleware;
 using Microsoft.IdentityModel.Tokens;
+using StackExchange.Redis;
 using System.Text;
 
 var envPath = Path.Combine(Directory.GetCurrentDirectory(), "../../../.env");
@@ -24,6 +25,17 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(optio
     options.ValueLengthLimit = int.MaxValue;
     options.MultipartHeadersLengthLimit = int.MaxValue;
 });
+
+// Register Redis (for token blacklist check)
+var redisConnectionString = builder.Configuration.GetConnectionString("Redis")
+    ?? Environment.GetEnvironmentVariable("REDIS_CONNECTION")
+    ?? "localhost:6379";
+var redisPassword = builder.Configuration["Redis:Password"]
+    ?? Environment.GetEnvironmentVariable("REDIS_PASSWORD");
+if (!string.IsNullOrEmpty(redisPassword))
+    redisConnectionString += $",password={redisPassword}";
+builder.Services.AddSingleton<IConnectionMultiplexer>(
+    ConnectionMultiplexer.Connect(redisConnectionString));
 
 // Configure Dual Authentication (Auth0 + Local JWT)
 var jwtSecret = builder.Configuration["Jwt:Secret"] ?? throw new InvalidOperationException("JWT Secret not configured");
@@ -181,8 +193,17 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 // Configure CORS
-var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() 
-    ?? new[] { "http://localhost:3000" };
+string[] allowedOrigins;
+if (builder.Environment.IsDevelopment())
+{
+    allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+        ?? new[] { "http://localhost:3000", "http://localhost:4200", "http://localhost:5173" };
+}
+else
+{
+    allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+        ?? throw new InvalidOperationException("Cors:AllowedOrigins must be configured in production.");
+}
 
 builder.Services.AddCors(options =>
 {
@@ -241,6 +262,32 @@ app.UseWebSockets(new WebSocketOptions
 // Add authentication and authorization middleware
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Token blacklist middleware — rejects requests from blocked users whose JWT is still valid
+app.Use(async (context, next) =>
+{
+    if (context.User.Identity?.IsAuthenticated == true)
+    {
+        var userId = context.User.FindFirst("userId")?.Value
+            ?? context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+            ?? context.User.FindFirst("sub")?.Value;
+
+        if (userId is not null)
+        {
+            var redis = context.RequestServices.GetRequiredService<IConnectionMultiplexer>();
+            var db = redis.GetDatabase();
+            var isBlocked = await db.KeyExistsAsync($"blocked:{userId}");
+
+            if (isBlocked)
+            {
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                await context.Response.WriteAsJsonAsync(new { error = "Auth.UserBlocked", message = "This account has been suspended." });
+                return;
+            }
+        }
+    }
+    await next();
+});
 
 // Health check endpoint
 app.MapHealthChecks("/health");

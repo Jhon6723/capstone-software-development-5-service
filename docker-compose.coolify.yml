@@ -22,11 +22,15 @@ services:
       - ReverseProxy__Clusters__projects-cluster__Destinations__projects-api-1__Address=http://projects:8082
       - ReverseProxy__Clusters__notifications-cluster__Destinations__notifications-api-1__Address=http://notifications:8083
       - ReverseProxy__Clusters__ia-cluster__Destinations__ia-api-1__Address=http://ia:8084
+      - REDIS_CONNECTION=redis:6379
+      - Redis__Password=${REDIS_PASSWORD}
+      - Cors__AllowedOrigins__0=${CORS_ALLOWED_ORIGIN_0}
     depends_on:
       - auth
       - projects
       - notifications
       - ia
+      - redis
     healthcheck:
       test: curl --fail http://localhost:8080/health || exit 1
       interval: 10s
@@ -50,8 +54,12 @@ services:
       - Jwt__Audience=${JWT_AUDIENCE}
       - Auth0__Domain=${AUTH0_DOMAIN}
       - Auth0__Audience=${AUTH0_AUDIENCE}
+      - REDIS_CONNECTION=redis:6379
+      - Redis__Password=${REDIS_PASSWORD}
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   projects:

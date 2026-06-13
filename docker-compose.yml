@@ -19,6 +19,10 @@ services:
       - ReverseProxy__Clusters__auth-cluster__Destinations__auth-api-1__Address=http://auth:8081
       - ReverseProxy__Clusters__projects-cluster__Destinations__projects-api-1__Address=http://projects:8082
       - ReverseProxy__Clusters__notifications-cluster__Destinations__notifications-api-1__Address=http://notifications:8083
+      - REDIS_CONNECTION=redis:6379
+      - Redis__Password=${REDIS_PASSWORD}
+    depends_on:
+      - redis
 
   auth:
     build:
@@ -37,7 +41,10 @@ services:
       - Jwt__Audience=${JWT_AUDIENCE}
       - Auth0__Domain=${AUTH0_DOMAIN}
       - Auth0__Audience=${AUTH0_AUDIENCE}
-
+      - REDIS_CONNECTION=redis:6379
+      - Redis__Password=${REDIS_PASSWORD}
+    depends_on:
+      - redis
 
   projects:
     build:

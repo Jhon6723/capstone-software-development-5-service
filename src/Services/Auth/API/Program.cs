@@ -1,12 +1,15 @@
 using Auth0.AspNetCore.Authentication.Api;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using System.Threading.RateLimiting;
 using PixPro.Services.Auth.Application;
 using PixPro.Services.Auth.Domain.Repositories;
 using PixPro.Services.Auth.Infrastructure.Persistence;
 using PixPro.Services.Auth.Infrastructure.Persistence.Repositories;
+using StackExchange.Redis;
 using System.Text;
 
 // Load .env file if it exists (for local development without Docker)
@@ -22,13 +25,35 @@ builder.Configuration["ConnectionStrings:AuthDb"] =
     Environment.GetEnvironmentVariable("AUTH_DB_CONNECTION") ?? "";
 builder.Configuration["Jwt:ExpirationMinutes"] =
     Environment.GetEnvironmentVariable("JWT_EXPIRATION_MINUTES") ?? "60";
+builder.Configuration["ConnectionStrings:Redis"] =
+    Environment.GetEnvironmentVariable("REDIS_CONNECTION") ?? "localhost:6379";
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHealthChecks();
 
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddFixedWindowLimiter("AuthPolicy", config =>
+    {
+        config.PermitLimit = 10;
+        config.Window = TimeSpan.FromMinutes(1);
+        config.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+        config.QueueLimit = 0;
+    });
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+});
+
 builder.Services.AddDbContext<AuthDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("AuthDb")));
+
+// Register Redis
+var redisConnectionString = builder.Configuration.GetConnectionString("Redis") ?? "localhost:6379";
+var redisPassword = builder.Configuration["Redis:Password"];
+if (!string.IsNullOrEmpty(redisPassword))
+    redisConnectionString += $",password={redisPassword}";
+builder.Services.AddSingleton<IConnectionMultiplexer>(
+    ConnectionMultiplexer.Connect(redisConnectionString));
 
 // Register Infrastructure services
 builder.Services.AddScoped<IUserRepository, UserRepository>();
@@ -167,6 +192,7 @@ using (var scope = app.Services.CreateScope())
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 app.MapControllers();
 app.MapHealthChecks("/health");
 

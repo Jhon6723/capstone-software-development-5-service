@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Configuration;
 using PixPro.Services.Auth.Application.Common.Results;
 using PixPro.Services.Auth.Application.DTOs.Requests;
 using PixPro.Services.Auth.Application.DTOs.Responses;
@@ -6,6 +7,7 @@ using PixPro.Services.Auth.Application.Services.Interfaces;
 using PixPro.Services.Auth.Domain.Entities;
 using PixPro.Services.Auth.Domain.Repositories;
 using PixPro.Services.Auth.Domain.Specifications;
+using StackExchange.Redis;
 
 namespace PixPro.Services.Auth.Application.Services.Implementations;
 
@@ -13,11 +15,21 @@ public sealed class AuthService : IAuthService
 {
     private readonly IUserRepository _userRepository;
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
+    private readonly IDatabase _redis;
+    private readonly int _jwtExpirationMinutes;
 
-    public AuthService(IUserRepository userRepository, IJwtTokenGenerator jwtTokenGenerator)
+    private static string BlacklistKey(Guid userId) => $"blocked:{userId}";
+
+    public AuthService(
+        IUserRepository userRepository,
+        IJwtTokenGenerator jwtTokenGenerator,
+        IConnectionMultiplexer redis,
+        IConfiguration configuration)
     {
         _userRepository = userRepository;
         _jwtTokenGenerator = jwtTokenGenerator;
+        _redis = redis.GetDatabase();
+        _jwtExpirationMinutes = int.TryParse(configuration["Jwt:ExpirationMinutes"], out var m) ? m : 60;
     }
 
     private static Result ValidatePassword(string password)
@@ -217,6 +229,12 @@ public sealed class AuthService : IAuthService
 
         user.Block();
         await _userRepository.SaveChangesAsync(cancellationToken);
+
+        await _redis.StringSetAsync(
+            BlacklistKey(userId),
+            "1",
+            TimeSpan.FromMinutes(_jwtExpirationMinutes));
+
         return Result.Success();
     }
 
@@ -229,6 +247,9 @@ public sealed class AuthService : IAuthService
 
         user.Unblock();
         await _userRepository.SaveChangesAsync(cancellationToken);
+
+        await _redis.KeyDeleteAsync(BlacklistKey(userId));
+
         return Result.Success();
     }
 }
