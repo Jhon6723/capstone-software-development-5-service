@@ -65,5 +65,15 @@ public sealed class UserCreditConfiguration : IEntityTypeConfiguration<UserCredi
             .IsUnique();
 
         builder.HasIndex(uc => uc.UserId);
+
+        // Use PostgreSQL's system column "xmin" as an optimistic concurrency token.
+        // EF Core checks it on every UPDATE: if another transaction modified the row
+        // in between, SaveChanges throws DbUpdateConcurrencyException. "xmin" is a
+        // hidden system column, so no extra column or migration is required.
+        builder.Property<uint>("xmin")
+            .HasColumnName("xmin")
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsConcurrencyToken();
     }
 }
