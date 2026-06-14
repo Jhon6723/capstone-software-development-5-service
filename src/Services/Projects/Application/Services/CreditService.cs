@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using PixPro.Services.Projects.Application.Common.Exceptions;
 using PixPro.Services.Projects.Application.Common.Results;
 using PixPro.Services.Projects.Application.DTOs.Responses;
 using PixPro.Services.Projects.Domain.Entities;
@@ -23,6 +24,7 @@ public sealed class CreditService : ICreditService
     };
 
     private const int FluxDailyDefaultLimit = 200;
+    private const int MaxConcurrencyRetries = 3;
 
     public CreditService(IUserCreditRepository creditRepository, ILogger<CreditService> logger)
     {
@@ -33,13 +35,15 @@ public sealed class CreditService : ICreditService
     /// <summary>
     /// Tracks daily usage of <c>flux-schnell</c> (free model) for a user and enforces
     /// the <see cref="FluxDailyDefaultLimit"/> cap. Unlike paid models, flux-schnell
-    /// does not consume credits — this is a sliding 24-hour rate limit to prevent
+    /// does not consume credits — this is a fixed rolling 24-hour window to prevent
     /// cost abuse on the underlying Pixazo API.
     /// </summary>
     /// <remarks>
     /// A <c>UserCredit</c> row with <c>ModelTier.Pixazo</c> is created on first use
     /// and reused as the counter anchor. The counter resets automatically after 24 hours.
     /// Admins bypass this check entirely (handled in <c>ImageService</c>).
+    /// Race conditions are prevented via optimistic concurrency (the entity uses an
+    /// <c>xmin</c> token); on a conflict the operation is retried with fresh data.
     /// </remarks>
     /// <returns>
     /// <c>Success(true)</c> if the request is within the daily limit;
@@ -49,35 +53,57 @@ public sealed class CreditService : ICreditService
         Guid userId,
         CancellationToken cancellationToken = default)
     {
-        var credit = await _creditRepository.GetByUserAndModelAsync(userId, ModelTier.Pixazo, cancellationToken);
-
-        if (credit is null)
+        for (var attempt = 1; attempt <= MaxConcurrencyRetries; attempt++)
         {
-            credit = new UserCredit(
-                userId,
-                ModelTier.Pixazo,
-                creditsRemaining: 0,
-                creditsTotal: 0,
-                subscriptionTier: SubscriptionTier.Free);
+            var credit = await _creditRepository.GetByUserAndModelAsync(
+                userId, ModelTier.Pixazo, cancellationToken);
 
-            await _creditRepository.AddAsync(credit, cancellationToken);
+            if (credit is null)
+            {
+                credit = new UserCredit(
+                    userId,
+                    ModelTier.Pixazo,
+                    creditsRemaining: 0,
+                    creditsTotal: 0,
+                    subscriptionTier: SubscriptionTier.Free);
+
+                await _creditRepository.AddAsync(credit, cancellationToken);
+            }
+
+            // Business rule lives in the domain entity: reset window, check cap, increment.
+            if (!credit.TryIncrementFluxDaily(FluxDailyDefaultLimit))
+            {
+                _logger.LogWarning(
+                    "flux-schnell daily limit reached for UserId: {UserId}. Limit: {Limit}",
+                    userId, FluxDailyDefaultLimit);
+                return Result<bool>.Failure("FLUX_DAILY_LIMIT_EXCEEDED");
+            }
+
+            try
+            {
+                await _creditRepository.SaveChangesAsync(cancellationToken);
+
+                _logger.LogInformation(
+                    "flux-schnell usage incremented for UserId: {UserId}. Count: {Count}",
+                    userId, credit.FluxDailyCount);
+
+                return Result<bool>.Success(true);
+            }
+            catch (ConcurrencyConflictException)
+            {
+                // A concurrent request modified or inserted the row first. The
+                // repository has already refreshed the tracked state, so retry with
+                // fresh data and re-evaluate the limit.
+                _logger.LogWarning(
+                    "Concurrency conflict on flux-schnell increment for UserId: {UserId}. Attempt {Attempt}/{Max}",
+                    userId, attempt, MaxConcurrencyRetries);
+            }
         }
 
-        if (!credit.TryIncrementFluxDaily(FluxDailyDefaultLimit))
-        {
-            _logger.LogWarning(
-                "flux-schnell daily limit reached for UserId: {UserId}. Limit: {Limit}",
-                userId, FluxDailyDefaultLimit);
-            return Result<bool>.Failure("FLUX_DAILY_LIMIT_EXCEEDED");
-        }
-
-        await _creditRepository.SaveChangesAsync(cancellationToken);
-
-        _logger.LogInformation(
-            "flux-schnell usage incremented for UserId: {UserId}. Count: {Count}",
-            userId, credit.FluxDailyCount);
-
-        return Result<bool>.Success(true);
+        _logger.LogError(
+            "flux-schnell increment failed after {Max} concurrency retries for UserId: {UserId}",
+            MaxConcurrencyRetries, userId);
+        return Result<bool>.Failure("FLUX_DAILY_CONCURRENCY_RETRY_EXCEEDED");
     }
 
     public async Task<Result<bool>> TryDeductCreditAsync(
