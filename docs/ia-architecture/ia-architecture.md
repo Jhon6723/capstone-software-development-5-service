@@ -348,8 +348,10 @@ HTTP Request → Projects Service
      ├─ Admin → skip all credit logic → publish event
      └─ Regular user → continue
   2. Identify model_tier from request parameters
-     ├─ flux-schnell → skip credit check (unlimited) → publish event
-     └─ gpt_mini_low | kontext | nanobanana_low | nanobanana_medium | nanobanana_max | gpt_mini_high → continue
+     ├─ flux-schnell → invoke TryIncrementFluxDailyAsync (200/day rolling window)
+        ├─ limit exceeded → return FLUX_DAILY_LIMIT_EXCEEDED
+        └─ within limit → increment FluxDailyCount → SaveChanges → publish event
+     └─ kontext | gpt-image-1.5-low | nanobanana_low | nanobanana_medium | nanobanana_max | gpt-image-1.5-medium → continue
   3. SELECT credits_remaining FROM user_credits
      WHERE user_id = ? AND model_tier = ?
      ├─ credits_remaining = 0 → return 402 INSUFFICIENT_CREDITS
@@ -391,12 +393,15 @@ flowchart TD
     A[User Request: POST /api/projects] --> B{Is Admin?}
     B -->|Yes| G[Skip credit check]
     B -->|No| C{model = flux-schnell?}
-    C -->|Yes| G
+    C -->|Yes| FS[TryIncrementFluxDaily<br/>200/day rolling window]
+    FS -->|Limit exceeded| FX[Return FLUX_DAILY_LIMIT_EXCEEDED]
+    FS -->|Within limit| H[Increment FluxDailyCount<br/>SaveChanges with OCC]
+    H --> G
     C -->|No| D[Query user_credits table]
     D --> E{credits_remaining > 0?}
     E -->|No| F[Return 402 INSUFFICIENT_CREDITS]
-    E -->|Yes| H[Atomic decrement credits_remaining]
-    H --> I{Decrement succeeded?}
+    E -->|Yes| AD[Atomic decrement credits_remaining]
+    AD --> I{Decrement succeeded?}
     I -->|No - race condition| F
     I -->|Yes| G
     G --> J[Publish ImageUploadedEvent to RabbitMQ]
@@ -418,6 +423,21 @@ flowchart TD
 | Subscription tier tracking | Projects Service DB | `user_credits.subscription_tier` |
 | Admin bypass | Projects Service | Role check in request handler |
 | IA Service | **No awareness of credits** | Pure processing worker |
+
+### **Optimistic Concurrency Control for flux-schnell**
+
+`flux-schnell` tracks usage via `FluxDailyCount` in the `user_credits` table with a rolling 24-hour window. Because this row is read-modify-written on every request, it is vulnerable to race conditions when two concurrent requests arrive before either one saves.
+
+The fix uses **optimistic concurrency control (OCC)** via PostgreSQL's hidden `xmin` system column:
+
+1. `UserCreditConfiguration` configures `xmin` as a concurrency token (`IsConcurrencyToken()`).
+2. `CreditService.TryIncrementFluxDailyAsync` reads the row, applies domain logic (`UserCredit.TryIncrementFluxDaily`), and calls `SaveChanges`.
+3. `UserCreditRepository.SaveChangesAsync` wraps EF Core's `SaveChanges` in a try/catch:
+   - `DbUpdateConcurrencyException` → `ReloadAsync` the tracked entity, then throw `ConcurrencyConflictException`.
+   - Unique-constraint `DbUpdateException` → detach the failed Added entity, then throw `ConcurrencyConflictException`.
+4. `CreditService` catches `ConcurrencyConflictException` in a retry loop (max 3 attempts), re-reads the fresh row, and re-applies domain logic.
+
+This keeps all business rules (limit check, window reset, increment) inside the `UserCredit` domain entity and avoids embedding logic in raw SQL, preserving Clean Architecture boundaries.
 
 ---
 
@@ -1099,7 +1119,10 @@ flowchart TD
     C -->|Yes ✓| BYPASS[Skip credit check]
     C -->|No| D{model = flux-schnell?}
 
-    D -->|Yes ✓ free tier| BYPASS
+    D -->|Yes| FS[TryIncrementFluxDaily\n200/day rolling window]
+    FS -->|Limit exceeded| FX[400 BadRequest\nFLUX_DAILY_LIMIT_EXCEEDED]
+    FS -->|Within limit| FS1[Increment FluxDailyCount\nOCC via xmin token]
+    FS1 --> BYPASS
     D -->|No| E[Query user_credits table\nWHERE user_id + model_tier]
 
     E --> F{Row exists?}
